@@ -367,7 +367,7 @@ function Start-CodexDesktop([string]$DesktopExecutable) {
 }
 
 function Wait-CodexDesktopExit([string]$DesktopExecutable) {
-    Write-Host "Waiting for ChatGPT to exit. When it closes, this launcher will publish task/sidebar changes to OneDrive." -ForegroundColor Yellow
+    Write-Host "Waiting for ChatGPT to exit. When it closes, this launcher will publish project workspaces and task/sidebar changes to OneDrive." -ForegroundColor Yellow
     $lastHeartbeat = [DateTimeOffset]::MinValue
     $consecutiveAbsentSamples = 0
     while ($true) {

@@ -1282,6 +1282,7 @@ function Write-InstallState {
         kit_root = Resolve-FullPath $KitRoot
         documents_root = Resolve-FullPath $DocumentsRoot
         codex_projects_link_enabled = [bool](Test-PathTargetsSource -Target $CodexProjectsTarget -Source $CodexProjectsSource)
+        codex_projects_sync_enabled = [bool]$ProjectWorkspaceSyncEnabled
         automations_link_enabled = [bool](Test-PathTargetsSource -Target $AutomationsTarget -Source $AutomationsSource)
         memory_subsystem_enabled = [bool]$MemorySubsystemEnabled
         backup_retention = $BackupRetention
@@ -1905,6 +1906,7 @@ $DocumentsRoot = if ([string]::IsNullOrWhiteSpace($DocumentsRoot)) {
 }
 $CodexProjectsSource = Join-Path $KitRoot "CodexProjects"
 $CodexProjectsTarget = Join-Path $DocumentsRoot "Codex"
+$ProjectWorkspaceSyncScript = Join-Path $KitRoot "skills\codex-skills\codexkit-sync\scripts\Sync-CodexProjectWorkspaces.ps1"
 $AutomationsSource = Join-Path $KitRoot "automations"
 $AutomationsTarget = Join-Path $CodexHome "automations"
 $EnvironmentInventoryScript = Join-Path $KitRoot "skills\codex-skills\codexkit-sync\scripts\Export-CodexEnvironmentInventory.ps1"
@@ -1948,6 +1950,7 @@ if ($Recommended) {
     $CaptureEnvironmentInventory = $true
     $InstallGlobalMemoryLink = $MemorySubsystemEnabled
     $InstallStartMenuShortcut = $true
+    $InstallCodexProjectsLink = $true
     $InstallSessionLinks =
         (Test-Path -LiteralPath (Join-Path $KitRoot "session-data\sessions") -PathType Container) -and
         (Test-Path -LiteralPath (Join-Path $KitRoot "session-data\archived_sessions") -PathType Container) -and
@@ -1980,6 +1983,12 @@ $expectedDesktopStateFiles = @(
 $SessionLinksRequested = [bool]$InstallSessionLinks
 $DesktopStateLinkRequested = [bool]$InstallDesktopStateLink
 $CodexProjectsLinkRequested = [bool]$InstallCodexProjectsLink
+$ProjectWorkspaceSyncEnabled = [bool]($InstallCodexProjectsLink -or
+    ($PreviousInstallState -and
+        (($PreviousInstallState.PSObject.Properties.Name -contains "codex_projects_sync_enabled" -and
+            [bool]$PreviousInstallState.codex_projects_sync_enabled) -or
+         ($PreviousInstallState.PSObject.Properties.Name -contains "codex_projects_link_enabled" -and
+            [bool]$PreviousInstallState.codex_projects_link_enabled))))
 $AutomationsLinkRequested = [bool]$InstallAutomationsLink
 
 if ($MigrateExistingCodexProjects) {
@@ -2026,12 +2035,15 @@ if ($Status) {
         $healthy = Test-PathTargetsSource -Target $entry.Target -Source $entry.Source
         Write-StatusRow $entry.Name $healthy $(if ($healthy) { "linked to $($entry.Source)" } else { "missing or wrong target" })
     }
-    $codexProjectsHealthy = (Test-Path -LiteralPath $CodexProjectsSource -PathType Container) -and
-        (Test-PathTargetsSource -Target $CodexProjectsTarget -Source $CodexProjectsSource)
+    $codexProjectsItem = Get-Item -LiteralPath $CodexProjectsTarget -Force -ErrorAction SilentlyContinue
+    $codexProjectsHealthy = $ProjectWorkspaceSyncEnabled -and
+        (Test-Path -LiteralPath $CodexProjectsSource -PathType Container) -and
+        $codexProjectsItem -and $codexProjectsItem.PSIsContainer -and
+        [string]::IsNullOrWhiteSpace([string]$codexProjectsItem.LinkType)
     if ($codexProjectsHealthy) {
-        Write-StatusRow "default Codex projects" $true "$CodexProjectsTarget -> $CodexProjectsSource"
+        Write-StatusRow "default Codex projects" $true "controlled Pull/Push between $CodexProjectsTarget and $CodexProjectsSource"
     } else {
-        Write-Host "[OPTIONAL] default Codex projects: not redirected; use -InstallCodexProjectsLink (and, only when needed, -MigrateExistingCodexProjects)" -ForegroundColor DarkGray
+        Write-StatusRow "default Codex projects" $false "run -Repair to restore a real local directory and controlled Pull/Push"
     }
     $automationsHealthy = (Test-Path -LiteralPath $AutomationsSource -PathType Container) -and
         (Test-PathTargetsSource -Target $AutomationsTarget -Source $AutomationsSource)
@@ -2283,120 +2295,38 @@ function Undo-CodexProjectsMerge($CreatedFiles, $CreatedDirectories) {
 }
 
 function Install-CodexProjectsLink {
-    Ensure-Dir (Split-Path -Parent $CodexProjectsSource)
-    if (Test-PathTargetsSource -Target $CodexProjectsTarget -Source $CodexProjectsSource) {
-        Write-Host "Default Codex projects link already correct: $CodexProjectsTarget -> $CodexProjectsSource" -ForegroundColor DarkGray
-        return
+    if (-not (Test-Path -LiteralPath $ProjectWorkspaceSyncScript -PathType Leaf)) {
+        throw "Missing project workspace sync helper: $ProjectWorkspaceSyncScript"
     }
-
-    $targetHasFiles = (Test-Path -LiteralPath $CodexProjectsTarget -PathType Container) -and
-        -not (Test-DirectoryEmpty $CodexProjectsTarget)
-    $sourceHasFiles = (Test-Path -LiteralPath $CodexProjectsSource -PathType Container) -and
-        -not (Test-DirectoryEmpty $CodexProjectsSource)
-
-    if ($targetHasFiles -and -not $MigrateExistingCodexProjects) {
-        throw "Existing projects were found at $CodexProjectsTarget. Close ChatGPT and rerun with -InstallCodexProjectsLink -MigrateExistingCodexProjects to copy them safely and retain a backup."
-    }
-    if (-not $targetHasFiles) {
-        Ensure-Dir $CodexProjectsSource
-        Install-DirLink -Source $CodexProjectsSource -Target $CodexProjectsTarget -Label "default Codex projects"
-        return
-    }
-
-    Write-Host "Migrating existing default Codex projects into OneDrive. Run this only while ChatGPT is fully closed." -ForegroundColor Yellow
-    $mergePlan = $null
-    if ($sourceHasFiles) {
-        $mergePlan = Get-CodexProjectsMergePlan -LocalRoot $CodexProjectsTarget -SharedRoot $CodexProjectsSource
-        if ($mergePlan.Conflicts.Count -gt 0) {
-            $report = Write-CodexProjectsConflictReport -Conflicts $mergePlan.Conflicts
-            throw "Project merge found $($mergePlan.Conflicts.Count) conflicting relative path(s). Nothing was changed. Review: $report"
+    Ensure-Dir $CodexProjectsSource
+    Ensure-Dir (Split-Path -Parent $CodexProjectsTarget)
+    $targetItem = Get-Item -LiteralPath $CodexProjectsTarget -Force -ErrorAction SilentlyContinue
+    if ($targetItem -and -not [string]::IsNullOrWhiteSpace([string]$targetItem.LinkType)) {
+        if (-not (Test-PathTargetsSource -Target $CodexProjectsTarget -Source $CodexProjectsSource)) {
+            throw "Refusing to replace an unrelated directory link: $CodexProjectsTarget"
         }
-        Write-Host "Merge preflight passed: $($mergePlan.MissingFiles.Count) new file(s), $($mergePlan.IdenticalFileCount) identical file(s)." -ForegroundColor Green
-    }
-    $backup = Backup-Path $CodexProjectsTarget
-    $sourceExistedBeforeMigration = Test-Path -LiteralPath $CodexProjectsSource
-    $sourcePopulatedForMigration = $false
-    $createdMergeFiles = New-Object System.Collections.Generic.List[string]
-    $createdMergeDirectories = New-Object System.Collections.Generic.List[string]
-    try {
-        if (-not $sourceHasFiles) {
-            Ensure-Dir $CodexProjectsSource
-            if (-not (Test-DirectoryEmpty $CodexProjectsSource)) {
-                throw "Migration destination became non-empty: $CodexProjectsSource"
-            }
-            $sourcePopulatedForMigration = $true
-            Copy-DirectoryContents -Source $backup -Destination $CodexProjectsSource
-
-            $backupFingerprint = (Get-DirectoryFingerprint $backup) -join "`n"
-            $sourceFingerprint = (Get-DirectoryFingerprint $CodexProjectsSource) -join "`n"
-            if ($backupFingerprint -ne $sourceFingerprint) {
-                throw "Project migration verification failed; the copied directory does not match the backup."
-            }
-        } else {
-            foreach ($relative in $mergePlan.RelativeDirectories) {
-                $destinationDirectory = Join-Path $CodexProjectsSource $relative
-                $existing = Get-Item -LiteralPath $destinationDirectory -Force -ErrorAction SilentlyContinue
-                if (-not $existing) {
-                    New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
-                    $createdMergeDirectories.Add($destinationDirectory) | Out-Null
-                } elseif (-not $existing.PSIsContainer) {
-                    throw "Merge destination changed after preflight: $destinationDirectory"
-                }
-            }
-            foreach ($entry in $mergePlan.MissingFiles) {
-                $localFile = Join-Path $backup $entry.Relative
-                $sharedFile = Join-Path $CodexProjectsSource $entry.Relative
-                $existing = Get-Item -LiteralPath $sharedFile -Force -ErrorAction SilentlyContinue
-                if ($existing) {
-                    if ($existing.PSIsContainer -or
-                        [long]$existing.Length -ne [long]$entry.Length -or
-                        (Get-FileHash -LiteralPath $sharedFile -Algorithm SHA256).Hash -ne $entry.Sha256) {
-                        throw "Merge destination changed after preflight: $sharedFile"
-                    }
-                    continue
-                }
-                Ensure-Dir (Split-Path -Parent $sharedFile)
-                Copy-Item -LiteralPath $localFile -Destination $sharedFile
-                $createdMergeFiles.Add($sharedFile) | Out-Null
-                if ((Get-FileHash -LiteralPath $sharedFile -Algorithm SHA256).Hash -ne $entry.Sha256) {
-                    throw "Merged file verification failed: $sharedFile"
-                }
-            }
-            foreach ($entry in $mergePlan.FileEntries) {
-                $sharedFile = Join-Path $CodexProjectsSource $entry.Relative
-                $sharedItem = Get-Item -LiteralPath $sharedFile -Force -ErrorAction SilentlyContinue
-                if (-not $sharedItem -or $sharedItem.PSIsContainer -or
-                    [long]$sharedItem.Length -ne [long]$entry.Length -or
-                    (Get-FileHash -LiteralPath $sharedFile -Algorithm SHA256).Hash -ne $entry.Sha256) {
-                    throw "Final merged-file verification failed: $sharedFile"
-                }
-            }
+        Write-Host "Replacing the legacy project workspace Junction with a real local directory." -ForegroundColor Yellow
+        [IO.Directory]::Delete($CodexProjectsTarget, $false)
+        Ensure-Dir $CodexProjectsTarget
+        Copy-DirectoryContents -Source $CodexProjectsSource -Destination $CodexProjectsTarget
+        if (((Get-DirectoryFingerprint $CodexProjectsSource) -join "`n") -ne
+            ((Get-DirectoryFingerprint $CodexProjectsTarget) -join "`n")) {
+            throw "Legacy Junction migration verification failed. Shared data remains unchanged at $CodexProjectsSource."
         }
-
-        Install-DirLink -Source $CodexProjectsSource -Target $CodexProjectsTarget -Label "default Codex projects"
-        Complete-Backup $CodexProjectsTarget
-        Write-Host "Existing projects now sync from: $CodexProjectsSource" -ForegroundColor Green
-        Write-Host "Rollback backup retained at: $backup" -ForegroundColor Yellow
-    } catch {
-        $migrationError = $_
-        try {
-            if ($createdMergeFiles.Count -gt 0 -or $createdMergeDirectories.Count -gt 0) {
-                Undo-CodexProjectsMerge -CreatedFiles $createdMergeFiles -CreatedDirectories $createdMergeDirectories
-            }
-            if ($sourcePopulatedForMigration -and (Test-Path -LiteralPath $CodexProjectsSource -PathType Container)) {
-                Clear-DirectoryContents $CodexProjectsSource
-            }
-            if (-not $sourceExistedBeforeMigration -and
-                (Test-Path -LiteralPath $CodexProjectsSource -PathType Container) -and
-                (Test-DirectoryEmpty $CodexProjectsSource)) {
-                Remove-PathNode $CodexProjectsSource
-            }
-        } catch {
-            Write-Host "Warning: could not fully clean the shared project destination after failure: $($_.Exception.Message)" -ForegroundColor Yellow
-        }
-        Restore-Backup -Path $CodexProjectsTarget -Backup $backup
-        throw $migrationError
+    } elseif (-not $targetItem) {
+        Ensure-Dir $CodexProjectsTarget
+    } elseif (-not $targetItem.PSIsContainer) {
+        throw "The Codex project workspace path is not a directory: $CodexProjectsTarget"
     }
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ProjectWorkspaceSyncScript `
+        -Pull -LocalRoot $CodexProjectsTarget -SharedRoot $CodexProjectsSource
+    if ($LASTEXITCODE -ne 0) { throw "Initial project workspace Pull failed with exit code $LASTEXITCODE." }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ProjectWorkspaceSyncScript `
+        -Push -LocalRoot $CodexProjectsTarget -SharedRoot $CodexProjectsSource
+    if ($LASTEXITCODE -ne 0) { throw "Initial project workspace Push failed with exit code $LASTEXITCODE." }
+    $script:ProjectWorkspaceSyncEnabled = $true
+    Write-Host "Projectless workspaces now use controlled Pull/Push with a real local Codex directory." -ForegroundColor Green
 }
 
 function Write-AutomationsConflictReport($Conflicts) {
@@ -2564,14 +2494,7 @@ if ($Repair) {
     $InstallMinimaxSkillsLink = -not (Test-PathTargetsSource -Target (Join-Path $CodexHome "minimax-skills") -Source (Join-Path $KitRoot "skills\minimax-skills"))
     $InstallGlobalMemoryLink = $MemorySubsystemEnabled -and
         -not (Test-PathTargetsSource -Target (Join-Path $env:USERPROFILE "global-memory") -Source (Join-Path $KitRoot "global-memory"))
-    $previousProjectsLinkEnabled = $PreviousInstallState -and
-        ($PreviousInstallState.PSObject.Properties.Name -contains "codex_projects_link_enabled") -and
-        [bool]$PreviousInstallState.codex_projects_link_enabled
-    if ($CodexProjectsLinkRequested -or $previousProjectsLinkEnabled) {
-        $InstallCodexProjectsLink = -not (Test-PathTargetsSource -Target $CodexProjectsTarget -Source $CodexProjectsSource)
-    } else {
-        $InstallCodexProjectsLink = $false
-    }
+    $InstallCodexProjectsLink = [bool]$ProjectWorkspaceSyncEnabled
     $previousAutomationsLinkEnabled = $PreviousInstallState -and
         ($PreviousInstallState.PSObject.Properties.Name -contains "automations_link_enabled") -and
         [bool]$PreviousInstallState.automations_link_enabled
@@ -2685,7 +2608,7 @@ if ($InstallMinimaxSkillsLink) {
 
 if ($InstallCodexProjectsLink) {
     Install-CodexProjectsLink
-    Write-Host "New projectless Codex workspaces under Documents\Codex now synchronize through CodexKit\CodexProjects." -ForegroundColor Green
+    Write-Host "New projectless Codex workspaces synchronize through the Managed launcher." -ForegroundColor Green
     Write-Host "Avoid editing the same project on two machines before OneDrive has finished syncing." -ForegroundColor Yellow
 }
 
@@ -2963,7 +2886,7 @@ It is intended to live in OneDrive, while machine-local Codex state remains in `
 - `memory-system/project-memory-registry.tsv`: shared project-memory registry with device-scoped local paths and portable OneDrive paths
 - `session-data/`: active/archived Codex conversations plus `session_index.jsonl` title metadata
 - `desktop-state/`: Codex desktop sidebar/project state used by controlled Push/Pull sync
-- `CodexProjects/`: optional synchronized backing store for projectless workspaces normally created under `Documents\Codex`
+- `CodexProjects/`: synchronized transport copy for projectless workspaces normally created under `Documents\Codex`
 - `scheduled-tasks/`: source XML plus portable settings for the memory maintenance task
 - `plugins/inventory.json`: installed plugin names and cached versions; plugin caches themselves are excluded
 - `projects/`: optional project-level Codex files, only if you ran with `-ProjectRoots` or `-ScanProjects`
@@ -2990,21 +2913,12 @@ cd "__DESTINATION_ROOT__"
 powershell -ExecutionPolicy Bypass -File .\Install-CodexKitForWindows.ps1 -Recommended
 ```
 
-`-Recommended` installs live skill and session links, global guidance links, hooks, linked global memory, captures a per-device environment inventory, and installs a Start menu shortcut named `ChatGPT`. Every machine uses the same Managed launcher. Conversation history and desktop organization are included by default; desktop organization uses the Managed launcher's controlled Pull/Push lifecycle. Profiles, Codex configuration, Codex automations, and the memory-maintenance scheduled task remain excluded. Choose model, reasoning, feature, and other Codex preferences locally on each machine. The legacy `-InstallResidentStartMenuShortcut` parameter is accepted only for command-line compatibility and installs the same Managed shortcut.
+`-Recommended` installs live skill and session links, global guidance links, hooks, linked global memory, controlled project-workspace synchronization, captures a per-device environment inventory, and installs a Start menu shortcut named `ChatGPT`. Every machine uses the same Managed launcher. Conversation history, desktop organization, and projectless workspaces are included by default. Project files are pulled before launch and pushed after exit while `Documents\Codex` remains a real local directory. Profiles, Codex configuration, Codex automations, and the memory-maintenance scheduled task remain excluded. Choose model, reasoning, feature, and other Codex preferences locally on each machine. The legacy `-InstallResidentStartMenuShortcut` parameter is accepted only for command-line compatibility and installs the same Managed shortcut.
 
-To redirect future projectless workspaces from `Documents\Codex` into
-`CodexKit\CodexProjects`, run:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\Install-CodexKitForWindows.ps1 -InstallCodexProjectsLink
-```
-
-If `Documents\Codex` already contains projects, fully close ChatGPT and add
-`-MigrateExistingCodexProjects`. If the shared folder already contains projects
-from another machine, the installer first compares both trees: identical files
-are deduplicated, local-only files are added with SHA-256 verification, and
-same-path differences stop without changing either tree. The original local
-directory remains as a timestamped rollback backup.
+The legacy `-InstallCodexProjectsLink` parameter remains accepted, but it now
+enables the same controlled Pull/Push mode and converts an old Junction into a
+real directory. Same-path edits made independently on both sides stop before
+mutation and are reported under the device-local CodexKit state directory.
 
 Install the memory-maintenance task only on the single designated maintenance host:
 

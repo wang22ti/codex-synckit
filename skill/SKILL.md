@@ -53,25 +53,23 @@ Install the memory-maintenance task only on the single designated maintenance ho
 
 Install session links by default when the shared session data is present.
 
-The optional default-project redirect uses `CodexKit\CodexProjects` as the
-OneDrive-backed source and the current Windows Documents folder's `Codex`
-directory as the link target:
+Default projectless-workspace synchronization keeps
+`%USERPROFILE%\Documents\Codex` as a real local directory and uses
+`CodexKit\CodexProjects` as its OneDrive transport copy. The Managed launcher
+pulls workspaces before launch and pushes them after ChatGPT exits.
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\OneDrive\CodexKit\Install-CodexKitForWindows.ps1" -InstallCodexProjectsLink
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\OneDrive\CodexKit\Install-CodexKitForWindows.ps1" -Recommended
 ```
 
-If `Documents\Codex` already contains projects, fully close ChatGPT and add
-`-MigrateExistingCodexProjects`. When `CodexKit\CodexProjects` is empty, the
-installer copies and verifies the complete local tree. When both sides contain
-files, it performs a preflight union: identical relative files are deduplicated,
-local-only files are added and verified by SHA-256, and the original local
-directory is retained as a timestamped rollback backup. A same-path
-content/type conflict stops before mutation and writes a device-local conflict
-report under `.local\state\codexkit`. Preserve an existing OneDrive shared root
-directory and copy children into it; Windows PowerShell 5.1 exposes OneDrive
-cloud placeholders as reparse points, so detect real junctions/symlinks by
-non-empty `LinkType`, not by the `ReparsePoint` attribute alone.
+`-InstallCodexProjectsLink` remains accepted for compatibility but now enables
+controlled synchronization; it must never create a link at `Documents\Codex`.
+`-Repair` converts the legacy Junction into a real directory without deleting
+the OneDrive copy. Initial Pull/Push creates a device-local content baseline.
+Later one-sided edits and deletions propagate directionally, while edits to the
+same relative file on both sides stop before mutation and write a device-local
+conflict report. Replaced or deleted destination files move to a device-local
+quarantine first.
 
 The optional automation redirect uses `CodexKit\automations` as the shared
 source and `%USERPROFILE%\.codex\automations` as the link target. It is not part
@@ -201,7 +199,9 @@ Confirm:
   shared session data after recommended installation, unless session export was
   explicitly disabled.
 - when default-project synchronization is enabled, the Windows Documents
-  `Codex` directory is a directory link targeting `CodexKit\CodexProjects`.
+  `Codex` directory is a real directory, and
+  `Sync-CodexProjectWorkspaces.ps1 -Status` reports the local, shared, and
+  baseline file counts.
 - when automation synchronization is enabled, `.codex\automations` is a
   directory link targeting `CodexKit\automations`; `.codex\state_5.sqlite`
   remains local.
@@ -238,7 +238,7 @@ Directional sync must not rewrite its authoritative source: Pull writes only the
 
 For user-facing switching, prefer root `Switch-CodexMachine.cmd`. It wraps `scripts\Switch-CodexMachine.ps1`, which offers a menu and coordinates desktop-state `Push`/`Pull`, session-link repair, and status checks.
 
-For startup automation, use root `Start-CodexManaged.vbs` on every machine for hidden background launch. Keep `Start-CodexManaged.cmd` for troubleshooting with visible logs. The launcher performs an authoritative Pull before launch, waits for its ChatGPT process to exit, and performs an authoritative Push afterward. It never hot-replaces desktop state in a running process and must not start a second managed instance while ChatGPT is already running on that same machine.
+For startup automation, use root `Start-CodexManaged.vbs` on every machine for hidden background launch. Keep `Start-CodexManaged.cmd` for troubleshooting with visible logs. The launcher pulls projectless workspaces first and desktop organization second, waits for ChatGPT to exit, then pushes workspace files before publishing desktop organization. It never hot-replaces desktop state in a running process and must not start a second managed instance while ChatGPT is already running on that same machine.
 
 Managed launch is fail-closed: every nested installer/sync command must return zero, and the Pull must produce a fresh device-local `%USERPROFILE%\.local\state\codexkit\last-desktop-sync.json` receipt containing the current device, mode, completion time, script hashes, state hashes, organization hash, and thread-catalog verification before ChatGPT may open. Recompute every receipt hash immediately before launch and reject any post-Pull change. A hidden-launch failure must show a Windows popup and point to `Start-CodexManaged.cmd` for visible diagnostics. This prevents an outdated OneDrive skill copy or a silently failed Pull from opening ChatGPT with stale sidebar state.
 

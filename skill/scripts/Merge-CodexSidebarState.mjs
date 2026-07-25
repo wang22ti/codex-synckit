@@ -35,6 +35,60 @@ function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }
 
+const projectlessRootToken = "__CODEX_PROJECTLESS_ROOT__";
+
+function portableProjectlessPath(value, localRoot) {
+  if (typeof value !== "string") return value;
+  const normalized = value.replaceAll("/", "\\");
+  if (normalized === projectlessRootToken || normalized.startsWith(`${projectlessRootToken}\\`)) {
+    return normalized;
+  }
+  const roots = [
+    localRoot?.replaceAll("/", "\\").replace(/\\+$/, ""),
+    normalized.match(/^[A-Za-z]:\\Users\\[^\\]+\\Documents\\Codex(?=\\|$)/i)?.[0],
+  ].filter(Boolean);
+  for (const root of roots) {
+    if (normalized.localeCompare(root, undefined, { sensitivity: "accent" }) === 0) {
+      return projectlessRootToken;
+    }
+    if (normalized.toLowerCase().startsWith(`${root.toLowerCase()}\\`)) {
+      return `${projectlessRootToken}\\${normalized.slice(root.length + 1)}`;
+    }
+  }
+  return value;
+}
+
+function transformStrings(value, transform) {
+  if (typeof value === "string") return transform(value);
+  if (Array.isArray(value)) return value.map((entry) => transformStrings(entry, transform));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, transformStrings(entry, transform)]));
+  }
+  return value;
+}
+
+function portableOrganization(organization, localRoot) {
+  const result = clone(organization);
+  for (const field of projectlessPathFields) {
+    result[field] = transformStrings(result[field], (value) => portableProjectlessPath(value, localRoot));
+  }
+  return result;
+}
+
+function localOrganization(organization, localRoot) {
+  const result = clone(organization);
+  for (const field of projectlessPathFields) {
+    result[field] = transformStrings(result[field], (value) => {
+      if (value === projectlessRootToken) return localRoot;
+      if (value.startsWith(`${projectlessRootToken}\\`)) {
+        return path.join(localRoot, value.slice(projectlessRootToken.length + 1));
+      }
+      return value;
+    });
+  }
+  return result;
+}
+
 function choose(base, local, shared, conflicts, label) {
   if (equal(local, shared)) return clone(local);
   if (equal(local, base)) return clone(shared);
@@ -109,6 +163,7 @@ const arrayFields = [
   "project-order",
   "pinned-thread-ids",
 ];
+const projectlessPathFields = [...mapFields, "electron-saved-workspace-roots"];
 
 function organizationFrom(state = {}) {
   const persisted = state["electron-persisted-atom-state"] ?? {};
@@ -205,25 +260,27 @@ for (const required of ["local", "shared", "base", "local-output", "shared-outpu
 }
 const mode = args.mode ?? "merge";
 if (!["pull", "push", "merge"].includes(mode)) throw new Error(`Invalid --mode: ${mode}`);
+const projectlessRoot = args["projectless-root"];
+if (!projectlessRoot) throw new Error("Missing --projectless-root");
 
 const localState = readJson(args.local);
 const sharedState = readJson(args.shared);
-const baseOrganization = readJson(args.base, {});
+const baseOrganization = portableOrganization(readJson(args.base, {}), projectlessRoot);
 if (!localState || !sharedState) throw new Error("Both local and shared desktop state files are required");
 
-const localOrganization = organizationFrom(localState);
-const sharedOrganization = organizationFrom(sharedState);
+const localOrganizationValue = portableOrganization(organizationFrom(localState), projectlessRoot);
+const sharedOrganization = portableOrganization(organizationFrom(sharedState), projectlessRoot);
 let organization;
 let conflicts = [];
 if (mode === "pull") {
   organization = clone(sharedOrganization);
 } else if (mode === "push") {
-  organization = clone(localOrganization);
+  organization = clone(localOrganizationValue);
 } else {
-  ({ organization, conflicts } = mergeOrganization(baseOrganization, localOrganization, sharedOrganization));
+  ({ organization, conflicts } = mergeOrganization(baseOrganization, localOrganizationValue, sharedOrganization));
 }
 
-writeJson(args["local-output"], applyOrganization(localState, organization));
+writeJson(args["local-output"], applyOrganization(localState, localOrganization(organization, projectlessRoot)));
 writeJson(args["shared-output"], applyOrganization(sharedState, organization));
 writeJson(args["base-output"], organization);
 writeJson(args["report-output"], {

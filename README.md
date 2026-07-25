@@ -19,9 +19,9 @@ machines:
   Start-menu shortcut. It prepares synchronization before launch and performs
   cleanup after ChatGPT closes.
 - **🔄 Comprehensive continuity:** Conversations, sidebar and project
-  organization, skills, hooks, global guidance, long-term memory, and
-  environment inventories can stay continuous. Project workspaces and
-  automations can be added when needed.
+  organization, project workspaces, skills, hooks, global guidance, long-term
+  memory, and environment inventories can stay continuous. Automations remain
+  optional.
 - **🧰 Your capabilities travel too:** Reusable Codex skills are synchronized,
   including skills for creating flowcharts, architecture diagrams, and other
   illustrations, so a new PC does not require rebuilding the whole workflow.
@@ -73,14 +73,14 @@ flowchart LR
     L["🚀 Managed shortcut<br/>One-click launch"] --> A["💻 Current PC<br/>Prepare before launch · Clean up after exit"]
     A <-->|"OneDrive transport"| K[("☁️ CodexKit<br/>Private OneDrive directory")]
     K <-->|"OneDrive transport"| B["💻 Another PC<br/>Continue conversations and workspace"]
-    K --- D["🧩 Conversations · Sidebar · Skills · Memory<br/>Optional projects and automations"]
+    K --- D["🧩 Conversations · Sidebar · Projects · Skills · Memory<br/>Automations optional"]
 ```
 
 1. For a new empty destination, the installer creates a private `CodexKit` from
    the selected data on the current PC. For an existing Kit, it joins without
    exporting stale local data back into the shared copy.
-2. It connects each Windows PC to that directory with verified links, hooks,
-   and a managed Start-menu shortcut.
+2. It connects each Windows PC with verified links, controlled file copying,
+   hooks, and a managed Start-menu shortcut.
 3. During installation, it requires an explicit Yes or No choice for the
    optional long-term memory subsystem; pressing Enter alone selects nothing.
 4. OneDrive transports file changes. Codex SyncKit supplies the Codex-specific
@@ -109,7 +109,7 @@ In the paths below, `%USERPROFILE%` is the current Windows user folder and
 | Long-term memory subsystem | Asked during installation | Subsystem code is installed as a Codex skill; private memory uses project `.learnings` folders and `%USERPROFILE%\global-memory` | Captures, recalls, organizes, and maintains facts and lessons across conversations and projects |
 | Conversation history | On | `.codex\sessions`, `.codex\archived_sessions`, `.codex\session_index.jsonl` → `CodexKit\session-data` | Complete active and archived conversations plus their title index, so another PC can reopen them |
 | Sidebar and project organization | On | Portable fields from `.codex\.codex-global-state.json` → `CodexKit\desktop-state` | Task titles, project groups, task-to-project assignments, descriptions, pins, and ordering; **not the actual project files** |
-| Project workspace files | Optional | `Documents\Codex` → `CodexKit\CodexProjects` | The real folders and files on disk, including source code, documents, `.git`, `.agents`, and project-level `.codex` settings |
+| Project workspace files | On | `Documents\Codex` ⇄ `CodexKit\CodexProjects` | Pulled before managed launch and pushed after exit; the local path remains a real directory as Codex requires, while source, documents, `.git`, `.agents`, and project-level `.codex` settings synchronize |
 | Codex automations | Optional | `.codex\automations` → `CodexKit\automations` | Automation definitions such as `automation.toml` and their `memory.md`; only one designated PC should execute a shared schedule |
 | Device environment inventory | On | Current PC scan → `CodexKit\environment\devices\<computer>.json` | A report of installed tools and versions for comparing PCs; it does not install or copy applications |
 | Plugin inventory | On | Names and versions found under `.codex\plugins\cache` → `CodexKit\plugins\inventory.json` | A list used to report missing plugins on another PC; plugin programs and caches are not copied |
@@ -121,11 +121,11 @@ In the paths below, `%USERPROFILE%` is the current Windows user folder and
 - **Long-term memory**
   - It is managed by the bundled [`memory-and-improvement`](subsystems/memory-and-improvement/README.md) subsystem, not merely copied as a folder.
   - Project memory is stored in `.learnings`; cross-project memory is stored in `global-memory`.
-  - A project's `.learnings` crosses devices only when the project is in OneDrive or project-workspace synchronization is enabled.
+  - `.learnings` inside the default projectless workspace follows workspace synchronization; projects elsewhere still need their own OneDrive placement.
 - **Sidebar and project workspaces**
   - “Sidebar and project organization” synchronizes how projects and tasks appear and are organized in ChatGPT.
   - “Project workspace files” synchronizes the real folders and files stored on disk.
-  - A project may appear in another PC's sidebar even when workspace-file synchronization is not enabled.
+  - Default workspace paths are stored portably in shared state and localized to the current PC during Pull.
 - **Privacy**
   - Conversation history, memory, sidebar organization, environment reports, and configuration snapshots may contain prompts, responses, learned facts, project names, software details, and local paths.
   - Keep the generated `CodexKit` directory private and see [Privacy](docs/PRIVACY.md) for the data boundary.

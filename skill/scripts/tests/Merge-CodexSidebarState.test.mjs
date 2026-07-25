@@ -56,6 +56,7 @@ function run(base, local, shared, suffix, mode = "merge") {
     "--shared-output", files.sharedOutput,
     "--base-output", files.baseOutput,
     "--report-output", files.reportOutput,
+    "--projectless-root", "C:\\Users\\local\\Documents\\Codex",
     "--mode", mode,
   ]);
   return Object.fromEntries(Object.entries(files).slice(3).map(([key, file]) => [key, JSON.parse(fs.readFileSync(file, "utf8"))]));
@@ -133,6 +134,21 @@ try {
   assert.deepEqual(pushed.sharedOutput["thread-project-assignments"], local["thread-project-assignments"]);
   assert.deepEqual(pushed.sharedOutput["projectless-thread-ids"], local["projectless-thread-ids"]);
   assert.equal(pushed.reportOutput.mode, "push");
+
+  const localPaths = state(1, {});
+  localPaths["thread-projectless-output-directories"] = {
+    t9: "C:\\Users\\local\\Documents\\Codex\\2026-07-26\\task\\outputs",
+  };
+  const portable = run({}, localPaths, state(2, {}), "portable", "push");
+  assert.equal(
+    portable.sharedOutput["thread-projectless-output-directories"].t9,
+    "__CODEX_PROJECTLESS_ROOT__\\2026-07-26\\task\\outputs",
+  );
+  const localized = run({}, state(1, {}), portable.sharedOutput, "localized", "pull");
+  assert.equal(
+    localized.localOutput["thread-projectless-output-directories"].t9,
+    "C:\\Users\\local\\Documents\\Codex\\2026-07-26\\task\\outputs",
+  );
 
   console.log("Merge-CodexSidebarState tests passed");
 } finally {
