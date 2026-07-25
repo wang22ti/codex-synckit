@@ -1,0 +1,40 @@
+# Authoritative built-in defaults for runtime behavior.
+# The loader reads this file first, then overlays ~/.codex/.../config.toml, env, and CLI.
+
+[paths]
+# Root of the global memory tree.
+global_root = "$HOME/global-memory"
+# Namespace parent directory under the global memory tree.
+global_namespaces_root = "$HOME/global-memory/namespaces"
+# Local state directory for registries, logs, and maintenance state.
+state_root = "$HOME/.local/state/memory-and-improvement"
+# Codex home used to derive skill and config locations.
+codex_home = "$HOME/.codex"
+# Directory that stores installed Codex skills.
+codex_skills_dir = "$HOME/.codex/skills"
+
+[defaults]
+# Fallback global namespace used only when a command targets one namespace without an explicit override.
+global_namespace = "research-principle"
+# Whether memory maintenance/logging should auto-commit git changes by default.
+git_autocommit = true
+# Whether nightly maintenance should run summary writeback by default.
+nightly_writeback = true
+# Whether nightly maintenance should auto-update the managed routing-policy block in SKILL.md.
+skill_policy_writeback = false
+# Minimum recurrence count for organize/writeback heuristics unless overridden.
+organize_min_recurrence = 2
+
+[maintenance]
+# Default maintenance scope for nightly/interval runs.
+scope = "both"
+
+[maintenance.schedule]
+# Scheduling mode used by install-nightly-maintenance.sh when no CLI override is passed.
+mode = "interval"
+# Fixed-mode hour in local time.
+hour = 4
+# Fixed-mode minute in local time.
+minute = 0
+# Interval-mode cadence in minutes.
+interval_minutes = 240

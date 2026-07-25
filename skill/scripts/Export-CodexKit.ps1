@@ -48,6 +48,8 @@ param(
     [switch]$IncludeDesktopState,
     [switch]$ExcludeSessions,
     [switch]$ExcludeDesktopState,
+    [switch]$IncludeMemorySubsystem,
+    [switch]$ExcludeMemorySubsystem,
     [switch]$CreateZip,
     [switch]$InstallLinks,
     [switch]$Force,
@@ -63,11 +65,17 @@ if ($IncludeSessions -and $ExcludeSessions) {
 if ($IncludeDesktopState -and $ExcludeDesktopState) {
     throw "Choose either -IncludeDesktopState or -ExcludeDesktopState, not both."
 }
+if ($IncludeMemorySubsystem -and $ExcludeMemorySubsystem) {
+    throw "Choose either -IncludeMemorySubsystem or -ExcludeMemorySubsystem, not both."
+}
 if (-not $PSBoundParameters.ContainsKey("IncludeSessions")) {
     $IncludeSessions = -not $ExcludeSessions
 }
 if (-not $PSBoundParameters.ContainsKey("IncludeDesktopState")) {
     $IncludeDesktopState = -not $ExcludeDesktopState
+}
+if (-not $PSBoundParameters.ContainsKey("IncludeMemorySubsystem")) {
+    $IncludeMemorySubsystem = -not $ExcludeMemorySubsystem
 }
 
 $script:StartedAt = Get-Date
@@ -248,8 +256,9 @@ function Remove-StaleManagedFiles {
 
     foreach ($relative in $script:PreviousManagedPaths) {
         if ($current.ContainsKey($relative)) { continue }
-        if ($relative -match '^(session-data|desktop-state)[\\/]') {
-            Write-Host "[KEEP] stale cleanup never removes conversation or desktop-state data: $relative" -ForegroundColor Yellow
+        if ($relative -match '^(session-data|desktop-state|global-memory|memory-system)[\\/]' -or
+            $relative -match '^skills[\\/][^\\/]+[\\/]memory-and-improvement([\\/]|$)') {
+            Write-Host "[KEEP] stale cleanup never removes conversation, desktop-state, or memory data: $relative" -ForegroundColor Yellow
             continue
         }
         if ($script:ProtectedManagedPaths.ContainsKey([string]$relative)) {
@@ -659,6 +668,12 @@ function Export-Skills {
         }
 
         foreach ($skillFolder in $skillFolders) {
+            $skillName = Split-Path -Leaf ($skillFolder.TrimEnd('\','/'))
+            if (-not $IncludeMemorySubsystem -and
+                $skillName.Equals("memory-and-improvement", [System.StringComparison]::OrdinalIgnoreCase)) {
+                Write-Skip "memory-and-improvement skill was explicitly excluded with the long-term memory subsystem"
+                continue
+            }
             $dest = Resolve-SkillDestination -SkillFolder $skillFolder -Root $root -DestinationRoot $bucketDest -UsedNames $usedNames
             Copy-DirectorySafe -Source $skillFolder -Destination $dest -Category "skills"
             $exportedCount++
@@ -738,6 +753,10 @@ function Export-Hooks {
 }
 
 function Export-GlobalMemory {
+    if (-not $IncludeMemorySubsystem) {
+        Write-Skip "long-term memory subsystem was explicitly excluded"
+        return
+    }
     Write-Info "Extracting global memory"
     $destination = Join-Path $script:DestinationRoot "global-memory"
     if (-not (Test-Path -LiteralPath $script:SourceGlobalMemory -PathType Container)) {
@@ -826,6 +845,10 @@ function Export-PluginInventory {
 }
 
 function Export-MemoryScheduledTask {
+    if (-not $IncludeMemorySubsystem) {
+        Write-Skip "memory maintenance settings were explicitly excluded with the long-term memory subsystem"
+        return
+    }
     Write-Info "Extracting memory maintenance scheduled task"
     $taskDestination = Join-Path $script:DestinationRoot "scheduled-tasks"
     Ensure-Directory $taskDestination
@@ -1096,6 +1119,8 @@ param(
     [switch]$InstallResidentStartMenuShortcut,
     [switch]$InstallMemoryTask,
     [switch]$RemoveMemoryTask,
+    [switch]$EnableMemorySubsystem,
+    [switch]$DisableMemorySubsystem,
     [switch]$OpenHooksTrust,
     [switch]$Recommended,
     [switch]$Status,
@@ -1107,6 +1132,29 @@ param(
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = "Stop"
+
+if ($EnableMemorySubsystem -and $DisableMemorySubsystem) {
+    throw "Choose either -EnableMemorySubsystem or -DisableMemorySubsystem, not both."
+}
+
+function Read-RequiredMemorySubsystemChoice {
+    while ($true) {
+        $answer = (Read-Host "Enable the optional long-term memory subsystem? Enter Y or N; there is no default").Trim()
+        switch -Regex ($answer) {
+            '^(?i:y|yes)$' { return $true }
+            '^(?i:n|no)$' { return $false }
+            default { Write-Host "Please enter Y or N. Pressing Enter alone does not select an option." -ForegroundColor Yellow }
+        }
+    }
+}
+
+$MemorySubsystemChoiceExplicit = [bool]($EnableMemorySubsystem -or $DisableMemorySubsystem)
+if ($Recommended -and -not $MemorySubsystemChoiceExplicit) {
+    $EnableMemorySubsystem = Read-RequiredMemorySubsystemChoice
+    $DisableMemorySubsystem = -not $EnableMemorySubsystem
+    $MemorySubsystemChoiceExplicit = $true
+}
+$MemorySubsystemEnabled = [bool]$EnableMemorySubsystem
 
 function Remove-ExpiredBackups($Path) {
     $parent = Split-Path -Parent $Path
@@ -1235,6 +1283,7 @@ function Write-InstallState {
         documents_root = Resolve-FullPath $DocumentsRoot
         codex_projects_link_enabled = [bool](Test-PathTargetsSource -Target $CodexProjectsTarget -Source $CodexProjectsSource)
         automations_link_enabled = [bool](Test-PathTargetsSource -Target $AutomationsTarget -Source $AutomationsSource)
+        memory_subsystem_enabled = [bool]$MemorySubsystemEnabled
         backup_retention = $BackupRetention
         start_menu_mode = $startMenuMode
         updated_at = (Get-Date).ToString("o")
@@ -1864,6 +1913,24 @@ $GlobalMemoryLinked = $false
 $PreviousInstallState = Read-InstallState
 $MemoryTaskRequested = [bool]$InstallMemoryTask
 
+if (-not $MemorySubsystemChoiceExplicit) {
+    if ($PreviousInstallState -and
+        $PreviousInstallState.PSObject.Properties.Name -contains "memory_subsystem_enabled") {
+        $MemorySubsystemEnabled = [bool]$PreviousInstallState.memory_subsystem_enabled
+    } else {
+        $MemorySubsystemEnabled =
+            (Test-Path -LiteralPath (Join-Path $KitRoot "global-memory") -PathType Container) -and
+            (Test-Path -LiteralPath (Join-Path $CodexHome "skills\memory-and-improvement") -PathType Container)
+    }
+}
+
+if ($DisableMemorySubsystem -and ($InstallGlobalMemory -or $InstallGlobalMemoryLink -or $InstallMemoryTask)) {
+    throw "Memory installation options cannot be combined with -DisableMemorySubsystem."
+}
+if ($InstallGlobalMemory -or $InstallGlobalMemoryLink -or $InstallMemoryTask) {
+    $MemorySubsystemEnabled = $true
+}
+
 # -InstallResidentStartMenuShortcut remains accepted for command-line compatibility,
 # but all machines now install the same Managed launcher.
 if ($InstallResidentStartMenuShortcut) { $InstallStartMenuShortcut = $true }
@@ -1879,7 +1946,7 @@ if ($Recommended) {
     $InstallGlobalGuidanceLinks = $true
     $InstallHooks = $true
     $CaptureEnvironmentInventory = $true
-    $InstallGlobalMemoryLink = $true
+    $InstallGlobalMemoryLink = $MemorySubsystemEnabled
     $InstallStartMenuShortcut = $true
     $InstallSessionLinks =
         (Test-Path -LiteralPath (Join-Path $KitRoot "session-data\sessions") -PathType Container) -and
@@ -1891,9 +1958,11 @@ if ($Recommended) {
 $expectedLinks = @(
     [pscustomobject]@{ Name = ".agents skills"; Source = (Join-Path $KitRoot "skills\agents-skills"); Target = (Join-Path $AgentsRoot "skills") },
     [pscustomobject]@{ Name = ".codex skills"; Source = (Join-Path $KitRoot "skills\codex-skills"); Target = (Join-Path $CodexHome "skills") },
-    [pscustomobject]@{ Name = ".codex minimax-skills"; Source = (Join-Path $KitRoot "skills\minimax-skills"); Target = (Join-Path $CodexHome "minimax-skills") },
-    [pscustomobject]@{ Name = "global memory"; Source = (Join-Path $KitRoot "global-memory"); Target = (Join-Path $env:USERPROFILE "global-memory") }
+    [pscustomobject]@{ Name = ".codex minimax-skills"; Source = (Join-Path $KitRoot "skills\minimax-skills"); Target = (Join-Path $CodexHome "minimax-skills") }
 )
+if ($MemorySubsystemEnabled) {
+    $expectedLinks += [pscustomobject]@{ Name = "global memory"; Source = (Join-Path $KitRoot "global-memory"); Target = (Join-Path $env:USERPROFILE "global-memory") }
+}
 $expectedGuidance = @(
     [pscustomobject]@{ Name = "global AGENTS.md"; Source = (Join-Path $KitRoot "rules\global\AGENTS.md"); Target = (Join-Path $CodexHome "AGENTS.md") },
     [pscustomobject]@{ Name = "global AGENTS.override.md"; Source = (Join-Path $KitRoot "rules\global\AGENTS.override.md"); Target = (Join-Path $CodexHome "AGENTS.override.md") }
@@ -2000,39 +2069,43 @@ if ($Status) {
     $startMenuMode = Get-ExistingStartMenuMode
     $startMenuHealthy = $startMenuMode -eq "Managed" -and (Test-StartMenuShortcut)
     Write-StatusRow "ChatGPT Start menu shortcut" $startMenuHealthy $(if ($startMenuHealthy) { "Managed mode; current name, target, and Appx icon" } else { "missing or stale; run -Repair" })
-    $promptMarker = Join-Path $env:USERPROFILE ".local\state\memory-and-improvement\user-prompt-hook.last-run.json"
-    if (Test-Path -LiteralPath $promptMarker -PathType Leaf) {
-        try {
-            $marker = Get-Content -LiteralPath $promptMarker -Raw -Encoding UTF8 | ConvertFrom-Json
-            Write-Host "[INFO] hook last run: $($marker.timestamp), source=$($marker.source)" -ForegroundColor DarkCyan
-        } catch {
-            Write-Host "[INFO] hook last-run marker is unreadable" -ForegroundColor Yellow
-        }
-    } else {
-        Write-Host "[INFO] hook has no real-run marker yet" -ForegroundColor Yellow
-    }
-    $taskState = Get-MemoryTaskState
-    if (-not $taskState.Available) {
-        Write-Host "[UNKNOWN] memory task: permission denied while reading Task Scheduler" -ForegroundColor Yellow
-    } else {
-        $expectedGlobalMemory = Resolve-FullPath (Join-Path $KitRoot "global-memory")
-        $expectedInstaller = Resolve-FullPath (Join-Path $CodexHome "skills\memory-and-improvement\scripts\maintenance\run-windows-maintenance.ps1")
-        $expectedProjectRoot = Resolve-FullPath $env:USERPROFILE
-        $taskHealthy = $taskState.Exists -and $taskState.State -eq "Ready" -and
-            $taskState.Arguments -match [regex]::Escape($expectedGlobalMemory) -and
-            $taskState.Arguments -match [regex]::Escape($expectedInstaller) -and
-            $taskState.Arguments -match ('(?i)-ProjectRoot\s+"' + [regex]::Escape($expectedProjectRoot) + '"') -and
-            $taskState.Arguments -match '(?i)-GitCommit\s+false'
-        if (-not $taskState.Exists) {
-            Write-Host "[OPTIONAL] memory task: missing; install only on the single automation host with -InstallMemoryTask" -ForegroundColor DarkGray
-        } elseif ($taskHealthy) {
-            Write-StatusRow "memory task" $true "ready with current paths"
+    if ($MemorySubsystemEnabled) {
+        $promptMarker = Join-Path $env:USERPROFILE ".local\state\memory-and-improvement\user-prompt-hook.last-run.json"
+        if (Test-Path -LiteralPath $promptMarker -PathType Leaf) {
+            try {
+                $marker = Get-Content -LiteralPath $promptMarker -Raw -Encoding UTF8 | ConvertFrom-Json
+                Write-Host "[INFO] hook last run: $($marker.timestamp), source=$($marker.source)" -ForegroundColor DarkCyan
+            } catch {
+                Write-Host "[INFO] hook last-run marker is unreadable" -ForegroundColor Yellow
+            }
         } else {
-            Write-Host "[INFO] memory task: state=$($taskState.State), but arguments contain stale paths or settings; repair only on the automation host with -Repair -InstallMemoryTask, or remove with -RemoveMemoryTask" -ForegroundColor Yellow
+            Write-Host "[INFO] hook has no real-run marker yet" -ForegroundColor Yellow
         }
+        $taskState = Get-MemoryTaskState
+        if (-not $taskState.Available) {
+            Write-Host "[UNKNOWN] memory task: permission denied while reading Task Scheduler" -ForegroundColor Yellow
+        } else {
+            $expectedGlobalMemory = Resolve-FullPath (Join-Path $KitRoot "global-memory")
+            $expectedInstaller = Resolve-FullPath (Join-Path $CodexHome "skills\memory-and-improvement\scripts\maintenance\run-windows-maintenance.ps1")
+            $expectedProjectRoot = Resolve-FullPath $env:USERPROFILE
+            $taskHealthy = $taskState.Exists -and $taskState.State -eq "Ready" -and
+                $taskState.Arguments -match [regex]::Escape($expectedGlobalMemory) -and
+                $taskState.Arguments -match [regex]::Escape($expectedInstaller) -and
+                $taskState.Arguments -match ('(?i)-ProjectRoot\s+"' + [regex]::Escape($expectedProjectRoot) + '"') -and
+                $taskState.Arguments -match '(?i)-GitCommit\s+false'
+            if (-not $taskState.Exists) {
+                Write-Host "[OPTIONAL] memory task: missing; install only on the single automation host with -InstallMemoryTask" -ForegroundColor DarkGray
+            } elseif ($taskHealthy) {
+                Write-StatusRow "memory task" $true "ready with current paths"
+            } else {
+                Write-Host "[INFO] memory task: state=$($taskState.State), but arguments contain stale paths or settings; repair only on the automation host with -Repair -InstallMemoryTask, or remove with -RemoveMemoryTask" -ForegroundColor Yellow
+            }
+        }
+        $registry = Join-Path $KitRoot "memory-system\project-memory-registry.tsv"
+        Write-StatusRow "project memory registry" (Test-Path -LiteralPath $registry -PathType Leaf) $(if (Test-Path -LiteralPath $registry -PathType Leaf) { $registry } else { "missing" })
+    } else {
+        Write-Host "[SKIP] long-term memory subsystem was not enabled for this installation" -ForegroundColor DarkGray
     }
-    $registry = Join-Path $KitRoot "memory-system\project-memory-registry.tsv"
-    Write-StatusRow "project memory registry" (Test-Path -LiteralPath $registry -PathType Leaf) $(if (Test-Path -LiteralPath $registry -PathType Leaf) { $registry } else { "missing" })
     Write-PluginStatus
     if (Test-Path -LiteralPath $EnvironmentInventoryScript -PathType Leaf) {
         & $EnvironmentInventoryScript -KitRoot $KitRoot -Status
@@ -2489,7 +2562,8 @@ if ($Repair) {
     $InstallSkillsLink = -not (Test-PathTargetsSource -Target (Join-Path $AgentsRoot "skills") -Source (Join-Path $KitRoot "skills\agents-skills"))
     $InstallCodexSkillsLink = -not (Test-PathTargetsSource -Target (Join-Path $CodexHome "skills") -Source (Join-Path $KitRoot "skills\codex-skills"))
     $InstallMinimaxSkillsLink = -not (Test-PathTargetsSource -Target (Join-Path $CodexHome "minimax-skills") -Source (Join-Path $KitRoot "skills\minimax-skills"))
-    $InstallGlobalMemoryLink = -not (Test-PathTargetsSource -Target (Join-Path $env:USERPROFILE "global-memory") -Source (Join-Path $KitRoot "global-memory"))
+    $InstallGlobalMemoryLink = $MemorySubsystemEnabled -and
+        -not (Test-PathTargetsSource -Target (Join-Path $env:USERPROFILE "global-memory") -Source (Join-Path $KitRoot "global-memory"))
     $previousProjectsLinkEnabled = $PreviousInstallState -and
         ($PreviousInstallState.PSObject.Properties.Name -contains "codex_projects_link_enabled") -and
         [bool]$PreviousInstallState.codex_projects_link_enabled
@@ -2553,7 +2627,9 @@ if ($Repair) {
     }
 }
 
-Merge-ProjectMemoryRegistry
+if ($MemorySubsystemEnabled) {
+    Merge-ProjectMemoryRegistry
+}
 
 if ($RemoveMemoryTask) {
     $taskState = Get-MemoryTaskState
@@ -3089,6 +3165,7 @@ function Write-ManifestAndLogs {
         source_agents_root = $script:SourceAgentsRoot
         source_global_memory = $script:SourceGlobalMemory
         memory_task_name = $MemoryTaskName
+        include_memory_subsystem = [bool]$IncludeMemorySubsystem
         include_sessions = [bool]$IncludeSessions
         include_desktop_state = [bool]$IncludeDesktopState
         destination_root = $script:DestinationRoot
@@ -3195,12 +3272,17 @@ try {
     Write-Info "Source Codex home: $script:SourceCodexHome"
     Write-Info "Source agents root: $script:SourceAgentsRoot"
     Write-Info "Source global memory: $script:SourceGlobalMemory"
+    Write-Info "Long-term memory subsystem: $(if ($IncludeMemorySubsystem) { 'included' } else { 'excluded' })"
     Write-Info "Default skill roots: $script:SourceAgentsRoot\skills ; $script:SourceCodexHome\skills ; $script:SourceCodexHome\minimax-skills"
     Write-Info "Destination CodexKit: $script:DestinationRoot"
     if ($DryRun) { Write-Warn2 "Dry-run mode is enabled. No files will be written or changed." }
 
     Ensure-Directory $script:DestinationRoot
-    foreach ($d in @("skills", "hooks", "hooks\scripts", "profiles", "profiles\_extracted", "rules", "scripts", "projects", "logs", "global-memory", "memory-system", "session-data", "desktop-state", "scheduled-tasks", "plugins")) {
+    $baseDirectories = @("skills", "hooks", "hooks\scripts", "profiles", "profiles\_extracted", "rules", "scripts", "projects", "logs", "session-data", "desktop-state", "plugins")
+    if ($IncludeMemorySubsystem) {
+        $baseDirectories += @("global-memory", "memory-system", "scheduled-tasks")
+    }
+    foreach ($d in $baseDirectories) {
         Ensure-Directory (Join-Path $script:DestinationRoot $d)
     }
 
@@ -3227,7 +3309,9 @@ try {
     Write-SwitchCommand
     Write-StartCommands
     Write-Readme
-    Add-ManifestFile -Path (Join-Path $script:DestinationRoot "memory-system\project-memory-registry.tsv") -Category "memory-system" -Source "shared CodexKit state"
+    if ($IncludeMemorySubsystem) {
+        Add-ManifestFile -Path (Join-Path $script:DestinationRoot "memory-system\project-memory-registry.tsv") -Category "memory-system" -Source "shared CodexKit state"
+    }
     Remove-StaleManagedFiles
 
     if ($InstallLinks) {

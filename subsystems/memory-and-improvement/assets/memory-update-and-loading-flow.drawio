@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" modified="2026-04-01T12:00:00Z" agent="Codex" version="26.0.0" compressed="false">
+  <diagram id="memory-flow" name="Page-1">
+    <mxGraphModel dx="1200" dy="1160" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="1160" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="2" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f7f3ea;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="0" y="0" width="1200" height="1160" as="geometry"/>
+        </mxCell>
+        <mxCell id="3" value="Memory Update and Loading Flow" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontStyle=1;fontSize=30;fontColor=#211a14;" vertex="1" parent="1">
+          <mxGeometry x="56" y="30" width="620" height="36" as="geometry"/>
+        </mxCell>
+        <mxCell id="4" value="Current model: SessionStart injects a guide only, the main session decides what to log, and memory is loaded gradually when needed." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=14;fontColor=#2d241d;" vertex="1" parent="1">
+          <mxGeometry x="56" y="72" width="920" height="24" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="10" value="A. Update Path" style="swimlane;startSize=34;rounded=1;whiteSpace=wrap;html=1;fillColor=#fffdf8;strokeColor=#3a2f25;fontStyle=1;fontSize=20;fontColor=#211a14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="120" width="1120" height="390" as="geometry"/>
+        </mxCell>
+        <mxCell id="11" value="1. Working turn&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;User message, repo fact,&lt;br&gt;failure pattern, or request&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffaf0;strokeColor=#3a2f25;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="10">
+          <mxGeometry x="20" y="70" width="220" height="98" as="geometry"/>
+        </mxCell>
+        <mxCell id="12" value="2. Main session decides&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;Apply routing rules in &lt;font face=&quot;Courier New&quot;&gt;SKILL.md&lt;/font&gt;&lt;br&gt;Choose project, global,&lt;br&gt;or promote to a skill&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d8ecd4;strokeColor=#305c3a;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="10">
+          <mxGeometry x="260" y="58" width="270" height="122" as="geometry"/>
+        </mxCell>
+        <mxCell id="13" value="3. Log memory&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-weight: normal;&quot;&gt;log-memory.sh&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;writes structured entries&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcebf7;strokeColor=#2f5673;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="10">
+          <mxGeometry x="575" y="45" width="225" height="98" as="geometry"/>
+        </mxCell>
+        <mxCell id="14" value="4. Index artifacts&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-weight: normal;&quot;&gt;log-asset.sh&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;writes the scope-specific&lt;br&gt;asset index&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#efe6d7;strokeColor=#5c4d3d;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="10">
+          <mxGeometry x="575" y="156" width="225" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="15" value="5. Init if needed&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-weight: normal;&quot;&gt;init-memory.sh&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;creates missing layout&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#efe6d7;strokeColor=#5c4d3d;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="10">
+          <mxGeometry x="575" y="282" width="225" height="96" as="geometry"/>
+        </mxCell>
+        <mxCell id="16" value="Project memory&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-weight: normal;&quot;&gt;./.learnings/&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;LEARNINGS.md / ERRORS.md&lt;br&gt;FEATURE_REQUESTS.md&lt;br&gt;.learnings/assets/&lt;br&gt;INDEX.md&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f6dfc6;strokeColor=#855d2a;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="10">
+          <mxGeometry x="860" y="42" width="230" height="164" as="geometry"/>
+        </mxCell>
+        <mxCell id="17" value="Global memory&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-weight: normal;&quot;&gt;~/global-memory/&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;namespaces/&amp;lt;name&amp;gt;/&lt;br&gt;.learnings/&lt;br&gt;assets/&lt;br&gt;INDEX.md&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f6dfc6;strokeColor=#855d2a;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="10">
+          <mxGeometry x="860" y="218" width="230" height="170" as="geometry"/>
+        </mxCell>
+        <mxCell id="18" value="Important boundary&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;Repo-local instructions stay in&lt;br&gt;&lt;font face=&quot;Courier New&quot;&gt;AGENTS.md&lt;/font&gt;&lt;br&gt;Memory stores facts, history,&lt;br&gt;and durable artifacts&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#efe6d7;strokeColor=#5c4d3d;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="10">
+          <mxGeometry x="260" y="210" width="290" height="148" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="19" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#4d4033;strokeWidth=2.5;" edge="1" parent="10" source="11" target="12">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="20" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#4d4033;strokeWidth=2.5;" edge="1" parent="10" source="12" target="13">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="21" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#4d4033;strokeWidth=2.5;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="10" source="13" target="14">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="22" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#4d4033;strokeWidth=2.5;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="10" source="14" target="15">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="23" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#4d4033;strokeWidth=2.5;" edge="1" parent="10" source="13" target="16">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="24" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#4d4033;strokeWidth=2.5;" edge="1" parent="10" source="15" target="17">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="25" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#4d4033;strokeWidth=2.5;dashed=1;" edge="1" parent="10" source="12" target="18">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="30" value="B. Nightly Maintenance" style="swimlane;startSize=34;rounded=1;whiteSpace=wrap;html=1;fillColor=#fffdf8;strokeColor=#3a2f25;fontStyle=1;fontSize=20;fontColor=#211a14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="540" width="1120" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="31" value="1. 04:00 cron&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;Installed by&lt;br&gt;&lt;font face=&quot;Courier New&quot;&gt;install-nightly-&lt;/font&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot;&gt;maintenance.sh&lt;/font&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffaf0;strokeColor=#3a2f25;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="30">
+          <mxGeometry x="20" y="70" width="200" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="32" value="2. nightly-maintenance.sh&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;Enumerates all registered&lt;br&gt;project memories and all&lt;br&gt;existing global namespaces&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcebf7;strokeColor=#2f5673;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="30">
+          <mxGeometry x="270" y="55" width="280" height="126" as="geometry"/>
+        </mxCell>
+        <mxCell id="33" value="3. writeback&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-weight: normal;&quot;&gt;writeback-memory.sh&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;promotes recurring entries&lt;br&gt;into SUMMARY.md&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#efe6d7;strokeColor=#5c4d3d;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="30">
+          <mxGeometry x="600" y="55" width="190" height="126" as="geometry"/>
+        </mxCell>
+        <mxCell id="34" value="4. organize&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-weight: normal;&quot;&gt;organize-memory.sh&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;refreshes REVIEW.md and&lt;br&gt;SUMMARY_CANDIDATES.md&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#efe6d7;strokeColor=#5c4d3d;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="30">
+          <mxGeometry x="840" y="55" width="200" height="126" as="geometry"/>
+        </mxCell>
+        <mxCell id="35" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#4d4033;strokeWidth=2.5;" edge="1" parent="30" source="31" target="32">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="36" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#4d4033;strokeWidth=2.5;" edge="1" parent="30" source="32" target="33">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="37" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#4d4033;strokeWidth=2.5;" edge="1" parent="30" source="33" target="34">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="40" value="C. New-Thread Loading Path" style="swimlane;startSize=34;rounded=1;whiteSpace=wrap;html=1;fillColor=#fffdf8;strokeColor=#3a2f25;fontStyle=1;fontSize=20;fontColor=#211a14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="790" width="1120" height="350" as="geometry"/>
+        </mxCell>
+        <mxCell id="41" value="1. New thread&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;Codex fires SessionStart&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffaf0;strokeColor=#3a2f25;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="40">
+          <mxGeometry x="20" y="70" width="190" height="84" as="geometry"/>
+        </mxCell>
+        <mxCell id="42" value="2. activator.sh&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;Injects locations, namespace&lt;br&gt;catalog, loading rules, and&lt;br&gt;the logging checklist only&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d8ecd4;strokeColor=#305c3a;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="40">
+          <mxGeometry x="250" y="56" width="280" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="43" value="3. Default read order&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-weight: normal;&quot;&gt;INIT.md -&amp;gt; SUMMARY.md&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;then factual files,&lt;br&gt;REVIEW, raw history,&lt;br&gt;asset index, then&lt;br&gt;concrete asset files&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f6dfc6;strokeColor=#855d2a;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="40">
+          <mxGeometry x="560" y="44" width="280" height="184" as="geometry"/>
+        </mxCell>
+        <mxCell id="44" value="4. No eager preload&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;Do not inject full project or&lt;br&gt;global memory contents.&lt;br&gt;Do not open raw artifacts&lt;br&gt;by default.&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#efe6d7;strokeColor=#5c4d3d;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="40">
+          <mxGeometry x="880" y="44" width="220" height="148" as="geometry"/>
+        </mxCell>
+        <mxCell id="45" value="Skip global memory when&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;the task is repo-local, casual,&lt;br&gt;or creative&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#efe6d7;strokeColor=#5c4d3d;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="40">
+          <mxGeometry x="250" y="264" width="430" height="82" as="geometry"/>
+        </mxCell>
+        <mxCell id="46" value="Open raw history only when&lt;br&gt;&lt;font style=&quot;font-weight: normal;&quot;&gt;higher layers are insufficient&lt;br&gt;or chronology matters&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#efe6d7;strokeColor=#5c4d3d;fontSize=14;fontStyle=1;spacingTop=10;" vertex="1" parent="40">
+          <mxGeometry x="710" y="264" width="390" height="82" as="geometry"/>
+        </mxCell>
+        <mxCell id="47" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#4d4033;strokeWidth=2.5;" edge="1" parent="40" source="41" target="42">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="48" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#4d4033;strokeWidth=2.5;" edge="1" parent="40" source="42" target="43">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="49" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#4d4033;strokeWidth=2.5;" edge="1" parent="40" source="43" target="44">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

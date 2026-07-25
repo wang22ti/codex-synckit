@@ -8,6 +8,8 @@ param(
     [switch]$ExcludeSessions,
     [switch]$ExcludeDesktopState,
     [switch]$InstallSessionLinks,
+    [switch]$InstallMemorySubsystem,
+    [switch]$SkipMemorySubsystem,
     # Retained for compatibility with earlier alpha commands. The private-data
     # boundary is now documented rather than gated because continuity is on by default.
     [switch]$AcceptPrivateDataRisk,
@@ -18,6 +20,9 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = "Stop"
 
+if ($InstallMemorySubsystem -and $SkipMemorySubsystem) {
+    throw "Choose either -InstallMemorySubsystem or -SkipMemorySubsystem, not both."
+}
 if ($IncludeSessions -and $ExcludeSessions) {
     throw "Choose either -IncludeSessions or -ExcludeSessions, not both."
 }
@@ -36,6 +41,25 @@ if (-not $PSBoundParameters.ContainsKey("IncludeDesktopState")) {
 }
 if ($Recommended -and $IncludeSessions) {
     $InstallSessionLinks = $true
+}
+
+function Read-RequiredMemorySubsystemChoice {
+    while ($true) {
+        $answer = (Read-Host "Install the optional long-term memory subsystem? Enter Y or N; there is no default").Trim()
+        switch -Regex ($answer) {
+            '^(?i:y|yes)$' { return $true }
+            '^(?i:n|no)$' { return $false }
+            default { Write-Host "Please enter Y or N. Pressing Enter alone does not select an option." -ForegroundColor Yellow }
+        }
+    }
+}
+
+$memorySubsystemEnabled = if ($InstallMemorySubsystem) {
+    $true
+} elseif ($SkipMemorySubsystem) {
+    $false
+} else {
+    Read-RequiredMemorySubsystemChoice
 }
 
 function Resolve-FullPath([string]$Path) {
@@ -70,14 +94,14 @@ function Test-TreesEqual([string]$Left, [string]$Right) {
 if ($InstallSessionLinks -and -not $IncludeSessions) {
     throw "-InstallSessionLinks requires -IncludeSessions."
 }
-if ($DryRun -and $Recommended) {
-    throw "-DryRun cannot be combined with -Recommended."
-}
-
 $sourceSkill = Join-Path $PSScriptRoot "skill"
 $sourceExporter = Join-Path $sourceSkill "scripts\Export-CodexKit.ps1"
+$sourceMemorySubsystem = Join-Path $PSScriptRoot "subsystems\memory-and-improvement"
 if (-not (Test-Path -LiteralPath $sourceExporter -PathType Leaf)) {
     throw "The release is incomplete: missing skill\scripts\Export-CodexKit.ps1."
+}
+if ($memorySubsystemEnabled -and -not (Test-Path -LiteralPath (Join-Path $sourceMemorySubsystem "SKILL.md") -PathType Leaf)) {
+    throw "The release is incomplete: missing subsystems\memory-and-improvement\SKILL.md."
 }
 
 $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE ".codex" }
@@ -120,6 +144,50 @@ if (-not $DryRun) {
         }
         Write-Host "[OK] installed codexkit-sync skill: $targetSkill" -ForegroundColor Green
     }
+
+    if ($memorySubsystemEnabled) {
+        $targetMemorySkill = Join-Path $skillParent "memory-and-improvement"
+        $memoryBackup = $null
+        if (Test-Path -LiteralPath $targetMemorySkill) {
+            if (Test-TreesEqual -Left $sourceMemorySubsystem -Right $targetMemorySkill) {
+                Write-Host "[OK] memory-and-improvement subsystem is already current" -ForegroundColor Green
+            } else {
+                if (-not $Force) {
+                    throw "A different memory-and-improvement skill already exists at $targetMemorySkill. Review it, then rerun with -Force to create a backup and replace it."
+                }
+                $memoryBackup = "$targetMemorySkill.backup.$(Get-Date -Format 'yyyyMMdd-HHmmssfff')"
+                Move-Item -LiteralPath $targetMemorySkill -Destination $memoryBackup
+                Write-Host "Backed up existing memory subsystem: $memoryBackup" -ForegroundColor Yellow
+            }
+        }
+
+        if (-not (Test-Path -LiteralPath $targetMemorySkill)) {
+            try {
+                New-Item -ItemType Directory -Force -Path $targetMemorySkill | Out-Null
+                foreach ($child in @(Get-ChildItem -LiteralPath $sourceMemorySubsystem -Force)) {
+                    Copy-Item -LiteralPath $child.FullName -Destination $targetMemorySkill -Recurse -Force
+                }
+            } catch {
+                if (Test-Path -LiteralPath $targetMemorySkill) {
+                    Remove-Item -LiteralPath $targetMemorySkill -Recurse -Force
+                }
+                if ($memoryBackup -and (Test-Path -LiteralPath $memoryBackup)) {
+                    Move-Item -LiteralPath $memoryBackup -Destination $targetMemorySkill
+                }
+                throw
+            }
+            if (-not (Test-TreesEqual -Left $sourceMemorySubsystem -Right $targetMemorySkill)) {
+                throw "Installed memory subsystem verification failed: $targetMemorySkill"
+            }
+            Write-Host "[OK] installed long-term memory subsystem: $targetMemorySkill" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "[SKIP] long-term memory subsystem was not added" -ForegroundColor DarkGray
+    }
+} elseif ($memorySubsystemEnabled) {
+    Write-Host "[DRY] would install the bundled memory-and-improvement subsystem" -ForegroundColor DarkCyan
+} else {
+    Write-Host "[DRY] long-term memory subsystem was explicitly skipped" -ForegroundColor DarkCyan
 }
 
 if ([string]::IsNullOrWhiteSpace($DestinationRoot)) {
@@ -134,6 +202,8 @@ if ($IncludeSessions) { $exportArguments += "-IncludeSessions" }
 if ($IncludeDesktopState) { $exportArguments += "-IncludeDesktopState" }
 if ($ExcludeSessions) { $exportArguments += "-ExcludeSessions" }
 if ($ExcludeDesktopState) { $exportArguments += "-ExcludeDesktopState" }
+if ($memorySubsystemEnabled) { $exportArguments += "-IncludeMemorySubsystem" }
+else { $exportArguments += "-ExcludeMemorySubsystem" }
 if ($DryRun) { $exportArguments += "-DryRun" }
 
 & powershell.exe @exportArguments
@@ -154,9 +224,12 @@ if ($Recommended) {
         "-KitRoot", $DestinationRoot, "-Recommended"
     )
     if ($InstallSessionLinks) { $installArguments += "-InstallSessionLinks" }
+    if ($memorySubsystemEnabled) { $installArguments += "-EnableMemorySubsystem" }
+    else { $installArguments += "-DisableMemorySubsystem" }
     & powershell.exe @installArguments
     if ($LASTEXITCODE -ne 0) { throw "Recommended installation failed with exit code $LASTEXITCODE." }
 }
 
 Write-Host "Codex SyncKit setup complete." -ForegroundColor Green
 Write-Host "Private kit: $DestinationRoot"
+Write-Host "Long-term memory subsystem: $(if ($memorySubsystemEnabled) { 'installed' } else { 'not added' })"

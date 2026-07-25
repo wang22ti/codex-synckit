@@ -32,3 +32,24 @@ Describe:
 Changes that weaken private-data exclusions, path validation, hash checks,
 rollback, or fail-closed startup require explicit security review.
 
+## Maintainer and acknowledgements
+
+Codex SyncKit was created and is maintained by
+[Codex SyncKit Maintainer](https://github.com/wang22ti/codex-synckit).
+
+The bundled `memory-and-improvement` subsystem began as an adaptation of
+[`self-improvement`](https://github.com/pskoett/pskoett-ai-skills/tree/main/skills/self-improvement)
+and its standalone
+[`self-improving-agent`](https://github.com/pskoett/self-improving-agent)
+package by [pskoett](https://github.com/pskoett). Their project-level
+`.learnings` structure, learning/error/feature-request records, promotion
+workflow, and skill-extraction pattern provided the starting point.
+
+This adaptation adds project-versus-global memory routing, cross-project
+namespaces, recall and search, maintenance and writeback workflows, and
+Codex/Windows synchronization integration.
+
+No explicit license file was found in the upstream repository roots or skill
+directory when this acknowledgement was added on 2026-07-25. Attribution does
+not replace any permission required to redistribute derived material. Verify
+the upstream terms or obtain permission before distributing this subsystem.

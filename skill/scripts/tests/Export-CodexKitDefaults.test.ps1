@@ -22,6 +22,7 @@ try {
         (Join-Path $sourceCodex "sessions\2026\01\01"),
         (Join-Path $sourceCodex "archived_sessions"),
         (Join-Path $sourceCodex "skills"),
+        (Join-Path $sourceCodex "skills\memory-and-improvement"),
         (Join-Path $sourceCodex "minimax-skills"),
         (Join-Path $sourceAgents "skills"),
         $sourceMemory
@@ -32,6 +33,8 @@ try {
     Set-Content -LiteralPath (Join-Path $sourceCodex "sessions\2026\01\01\test.jsonl") -Value '{"type":"test"}' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $sourceCodex "session_index.jsonl") -Value '{"id":"test","title":"Test"}' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $sourceCodex ".codex-global-state.json") -Value '{"projects":{},"thread-projects":{}}' -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $sourceCodex "skills\memory-and-improvement\SKILL.md") -Value '# memory subsystem fixture' -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $sourceMemory "README.md") -Value '# private global memory fixture' -Encoding UTF8
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $exporter `
         -SourceCodexHome $sourceCodex `
@@ -44,9 +47,12 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "session-data\sessions\2026\01\01\test.jsonl") -PathType Leaf) "default export should include conversations"
     Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "session-data\session_index.jsonl") -PathType Leaf) "default export should include the title index"
     Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "desktop-state\.codex-global-state.json") -PathType Leaf) "default export should include desktop organization"
+    Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "global-memory\README.md") -PathType Leaf) "default export should include the selected memory subsystem data"
+    Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "skills\codex-skills\memory-and-improvement\SKILL.md") -PathType Leaf) "default export should include the selected memory subsystem skill"
     $defaultManifest = Get-Content -LiteralPath (Join-Path $defaultDestination "manifest.json") -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert-True ([bool]$defaultManifest.include_sessions) "manifest should record default session inclusion"
     Assert-True ([bool]$defaultManifest.include_desktop_state) "manifest should record default desktop-state inclusion"
+    Assert-True ([bool]$defaultManifest.include_memory_subsystem) "manifest should record memory subsystem inclusion"
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $exporter `
         -SourceCodexHome $sourceCodex `
@@ -55,14 +61,18 @@ try {
         -DestinationRoot $optOutDestination `
         -ExcludeSessions `
         -ExcludeDesktopState `
+        -ExcludeMemorySubsystem `
         -Force
     if ($LASTEXITCODE -ne 0) { throw "Opt-out export failed with exit code $LASTEXITCODE." }
 
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $optOutDestination "session-data\session_index.jsonl") -PathType Leaf)) "session opt-out should omit the title index"
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $optOutDestination "desktop-state\.codex-global-state.json") -PathType Leaf)) "desktop-state opt-out should omit organization data"
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $optOutDestination "global-memory") -PathType Container)) "memory opt-out should not create a global-memory directory"
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $optOutDestination "skills\codex-skills\memory-and-improvement") -PathType Container)) "memory opt-out should omit the memory subsystem skill"
     $optOutManifest = Get-Content -LiteralPath (Join-Path $optOutDestination "manifest.json") -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert-True (-not [bool]$optOutManifest.include_sessions) "manifest should record session opt-out"
     Assert-True (-not [bool]$optOutManifest.include_desktop_state) "manifest should record desktop-state opt-out"
+    Assert-True (-not [bool]$optOutManifest.include_memory_subsystem) "manifest should record memory subsystem opt-out"
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $exporter `
         -SourceCodexHome $sourceCodex `
@@ -71,13 +81,16 @@ try {
         -DestinationRoot $defaultDestination `
         -ExcludeSessions `
         -ExcludeDesktopState `
+        -ExcludeMemorySubsystem `
         -Force
     if ($LASTEXITCODE -ne 0) { throw "In-place opt-out export failed with exit code $LASTEXITCODE." }
 
     Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "session-data\sessions\2026\01\01\test.jsonl") -PathType Leaf) "stale cleanup must never delete existing conversations"
     Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "desktop-state\.codex-global-state.json") -PathType Leaf) "stale cleanup must never delete existing desktop organization"
+    Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "global-memory\README.md") -PathType Leaf) "memory opt-out must never delete existing private memory"
+    Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "skills\codex-skills\memory-and-improvement\SKILL.md") -PathType Leaf) "memory opt-out must not delete a previously installed subsystem copy"
 
-    Write-Host "[OK] default continuity export and explicit opt-outs passed" -ForegroundColor Green
+    Write-Host "[OK] default continuity export, memory selection, and explicit opt-outs passed" -ForegroundColor Green
 }
 finally {
     if (Test-Path -LiteralPath $testRoot) {

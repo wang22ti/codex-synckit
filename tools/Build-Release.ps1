@@ -23,8 +23,10 @@ New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
 
 $copyNames = @(
     ".github", ".gitignore", "CHANGELOG.md", "CODE_OF_CONDUCT.md",
-    "CONTRIBUTING.md", "docs", "Install-CodexSyncKit.ps1", "LICENSE",
-    "README.md", "README.zh-CN.md", "SECURITY.md", "skill", "THIRD_PARTY_NOTICES.md", "tools"
+    "CONTRIBUTING.md", "docs", "Install-CodexSyncKit.cmd",
+    "Install-CodexSyncKit.ps1", "LICENSE",
+    "README.md", "README.zh-CN.md", "SECURITY.md", "skill", "subsystems",
+    "THIRD_PARTY_NOTICES.md", "tools"
 )
 foreach ($name in $copyNames) {
     $source = Join-Path $root $name
