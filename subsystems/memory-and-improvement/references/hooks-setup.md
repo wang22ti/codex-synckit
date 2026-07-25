@@ -8,20 +8,20 @@ Recommended default:
 
 - `SessionStart`: tell the main session where project and global memory live, and how to load them
 - after this skill is active, make an explicit recall decision before every reply; either perform the smallest relevant recall step first or make an internal safe-skip judgment
-- after meaningful work, make an explicit reflect decision; if the previous completed turn still lacks a reflect check by the next prompt, `UserPromptSubmit` may auto-run `reflect-memory.sh` before continuing
+- after meaningful work, make an explicit reflect decision and run `reflect-memory.sh` before the final response when appropriate
 
 Optional additions:
 
-- `UserPromptSubmit`: emit a per-turn recall reminder before replying and auto-run a previous-turn reflect check when the last completed turn has not yet recorded one
+- `UserPromptSubmit`: emit a per-turn reminder to recall before replying and reflect before the final response
 
 The hook layer should not decide what belongs in project memory vs global memory.
 The hook layer should not decide recall routing, safe-skip justification, or what memory candidate should be logged.
 That routing decision belongs to the main session, which should follow `SKILL.md` and call `log-memory.sh` directly when something is worth remembering.
-The current setup injects the closed-loop contract on `SessionStart`; the main session remains responsible for Recall -> Reason -> Respond/Act -> Reflect, but `UserPromptSubmit` can auto-run `reflect-memory.sh` for the previous completed turn when no reflect check was recorded before the next prompt. For audit-sensitive `memory-and-improvement` work, the session should run an audit-focused subagent when runtime rules and user permission allow it, or explicitly note the unmet audit requirement.
+The current setup injects the closed-loop contract on `SessionStart`; the main session remains responsible for Recall -> Reason -> Respond/Act -> Reflect, while `UserPromptSubmit` only reinforces that responsibility. For audit-sensitive `memory-and-improvement` work, the session should run an audit-focused subagent when runtime rules and user permission allow it, or explicitly note the unmet audit requirement.
 For the dedicated summary-first recall helper during later turns, use `scripts/recall/recall-memory.sh`.
 Its `auto` mode is only a lightweight scope heuristic after the main session has already decided recall is needed; it may resolve to `project`, `global`, or `both`, but it does not replace the main session's judgment about whether memory is relevant at all.
 For meaningful turns that may need a structured post-task check, use `scripts/recall/reflect-memory.sh`.
-The explicit judgment requirement still belongs to the main session, but the `UserPromptSubmit` hook may proactively run the advisory reflect helper for the previous completed turn so the session continues with a reflect result already available.
+The explicit judgment requirement belongs to the main session. The `UserPromptSubmit` hook does not run the advisory reflect helper automatically.
 After the recall decision, the session should run a short reasoning checklist:
 
 - what relevant memory did recall surface?
@@ -111,7 +111,7 @@ If your Codex runtime does not expand `~` in hook commands, use the absolute pat
 1. Enable the optional `UserPromptSubmit` hook.
 2. Start or continue a Codex session.
 3. Send a new prompt.
-4. Verify you see a recall reminder before replying, and when the previous completed turn lacked reflect, verify you also see an injected `reflect-memory.sh` result before the new turn continues.
+4. Verify you see a reminder to recall before replying and reflect before the final response, with no automatic `reflect-memory.sh` result injected by the hook.
 
 ## Troubleshooting
 
@@ -137,5 +137,5 @@ chmod +x ~/.codex/skills/memory-and-improvement/scripts/maintenance/writeback-me
 ## Security Notes
 
 - Hook scripts should only print memory locations and loading guidance.
-- Hook scripts may auto-run the advisory previous-turn reflect helper, but they must not silently decide project-vs-global routing or final logging actions.
+- Hook scripts should only inject memory locations and operating guidance; they must not run reflection or decide project-vs-global routing and final logging actions.
 - Do not log secrets, tokens, or raw private configs into `./.learnings/` or `~/global-memory/`.

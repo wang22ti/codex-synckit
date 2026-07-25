@@ -58,7 +58,7 @@ The intended runtime model is:
    Answer or act while honoring the recalled constraints and repo conventions.
 4. Reflect
    After meaningful work, make an explicit reflect decision.
-   Either run a structured reflect check, or let the next `UserPromptSubmit` hook auto-run `reflect-memory.sh` for the previous completed turn if no reflect check was recorded before the next prompt.
+   Run a structured reflect check before the final response when the turn produced a meaningful work product. The `UserPromptSubmit` hook only reminds the main session; it does not run reflection automatically.
 
 Strict runtime standard:
 
@@ -81,7 +81,7 @@ Current truth-in-advertising note:
 
 - the dedicated recall helper now exists as `scripts/recall/recall-memory.sh`
 - the dedicated reflect helper now exists as `scripts/recall/reflect-memory.sh`
-- the current hook setup injects runtime guidance on `SessionStart`, while `UserPromptSubmit` can auto-run `reflect-memory.sh` for the previous completed turn when no reflect check was recorded before the next prompt
+- the current hook setup injects runtime guidance on `SessionStart`, while `UserPromptSubmit` reminds the main session to recall before replying and reflect before the final response
 - `suggest-promotions.sh` and `reflect-memory.sh` are advisory helpers, while nightly organize/writeback remains supportive distillation rather than authoritative promotion
 - `scripts/maintenance/update-skill-policy.sh` is the only automatic rewrite path for `SKILL.md`, and it is limited to the managed routing-strategy block rather than the full skill body
 
@@ -659,7 +659,7 @@ Use this when the main session wants one obvious recall command before reasoning
 
 ### `scripts/recall/reflect-memory.sh`
 
-Dedicated advisory reflect entrypoint for meaningful turns, including the previous-turn auto-reflect path triggered from `UserPromptSubmit`.
+Dedicated advisory reflect entrypoint for meaningful turns. The main session runs it when appropriate; hooks only provide reminders.
 
 Responsibilities:
 
