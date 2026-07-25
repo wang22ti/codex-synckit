@@ -112,7 +112,7 @@ assert_contains "$project_index" "Rebuttal PDF Updated"
 assert_contains "$project_index" "paper_pdf"
 assert_contains "$project_index" "Representative rebuttal artifact updated"
 assert_contains "$project_index" "Status: active"
-project_asset_ids="$(printf '%s\n' "$project_index" | rg -o 'AST-[0-9]{8}-[0-9]{3}' | sort | uniq | wc -l | tr -d ' ')"
+project_asset_ids="$(printf '%s\n' "$project_index" | grep -Eo 'AST-[0-9]{8}-[0-9]{3}' | sort | uniq | wc -l | tr -d ' ')"
 if [[ "$project_asset_ids" != "1" ]]; then
     printf 'Expected project asset update to keep a single asset id, got %s\n' "$project_asset_ids" >&2
     exit 1
@@ -125,7 +125,7 @@ assert_contains "$global_index" "$FACT_FILE"
 assert_contains "$global_index" "Profile Fact File"
 assert_contains "$global_index" "Publications Fact File"
 
-unique_asset_ids="$(printf '%s\n' "$global_index" | rg -o 'AST-[0-9]{8}-[0-9]{3}' | sort | uniq | wc -l | tr -d ' ')"
+unique_asset_ids="$(printf '%s\n' "$global_index" | grep -Eo 'AST-[0-9]{8}-[0-9]{3}' | sort | uniq | wc -l | tr -d ' ')"
 if [[ "$unique_asset_ids" != "3" ]]; then
     printf 'Expected 3 unique global asset ids, got %s\n' "$unique_asset_ids" >&2
     exit 1
