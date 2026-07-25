@@ -1,4 +1,4 @@
 interface:
-  display_name: "CodexKit Sync"
+  display_name: "Codex SyncKit"
   short_description: "Export, install, and verify portable Codex settings"
   default_prompt: "Use $codexkit-sync to safely rebuild and verify my OneDrive CodexKit."

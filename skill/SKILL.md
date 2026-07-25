@@ -3,7 +3,7 @@ name: codexkit-sync
 description: Export, rebuild, install, and verify a portable Windows CodexKit in OneDrive. Use when the user asks to sync Codex skills, MiniMax skills, hooks, profiles, per-device environment inventories, global memory, Codex automations, plugin inventory, or the memory-maintenance scheduled task across Windows machines; manage the Export-CodexKit PowerShell script; install CodexKit with junctions; clean old CodexKit backups; or explicitly export sessions.
 ---
 
-# CodexKit Sync
+# Codex SyncKit
 
 Use the bundled `scripts/Export-CodexKit.ps1` as the canonical exporter.
 

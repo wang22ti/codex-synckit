@@ -1,4 +1,6 @@
-# CodexKit Sync
+# Codex SyncKit
+
+[简体中文](README.zh-CN.md) | English
 
 An unofficial, local-first Windows toolkit for exporting, installing, checking,
 and repairing a portable Codex working environment in OneDrive.
@@ -40,23 +42,24 @@ Git is not required for installation or normal use.
 5. Run:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-CodexKitSync.ps1 -Recommended
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-CodexSyncKit.ps1 -Recommended
 ```
 
-This installs the bundled `codexkit-sync` skill, exports a private CodexKit
+This installs the bundled skill under its compatibility ID, `codexkit-sync`,
+exports a private CodexKit
 under OneDrive, and applies the recommended links. It does not enable session
 or desktop-state synchronization.
 
 To export without installing links:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-CodexKitSync.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-CodexSyncKit.ps1
 ```
 
 To use a different destination:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-CodexKitSync.ps1 `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-CodexSyncKit.ps1 `
   -DestinationRoot "D:\OneDrive\CodexKit" -Recommended
 ```
 
@@ -68,7 +71,7 @@ paths, project names, and pasted secrets. They are disabled by default.
 Enabling them requires both an explicit feature switch and acknowledgement:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-CodexKitSync.ps1 `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-CodexSyncKit.ps1 `
   -IncludeSessions -IncludeDesktopState -AcceptPrivateDataRisk
 ```
 
@@ -114,4 +117,3 @@ not need it.
 ## License
 
 MIT. See [LICENSE](LICENSE).
-

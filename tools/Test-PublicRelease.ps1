@@ -21,9 +21,10 @@ $required = @(
     "CHANGELOG.md",
     "CODE_OF_CONDUCT.md",
     "CONTRIBUTING.md",
-    "Install-CodexKitSync.ps1",
+    "Install-CodexSyncKit.ps1",
     "LICENSE",
     "README.md",
+    "README.zh-CN.md",
     "SECURITY.md",
     "THIRD_PARTY_NOTICES.md",
     "docs\PRIVACY.md",
@@ -39,8 +40,8 @@ foreach ($relative in $required) {
 
 $allowedTopLevel = @(
     ".git", ".github", ".gitignore", "CHANGELOG.md", "CODE_OF_CONDUCT.md",
-    "CONTRIBUTING.md", "dist", "docs", "Install-CodexKitSync.ps1", "LICENSE",
-    "README.md", "SECURITY.md", "skill", "THIRD_PARTY_NOTICES.md", "tools"
+    "CONTRIBUTING.md", "dist", "docs", "Install-CodexSyncKit.ps1", "LICENSE",
+    "README.md", "README.zh-CN.md", "SECURITY.md", "skill", "THIRD_PARTY_NOTICES.md", "tools"
 )
 foreach ($entry in @(Get-ChildItem -LiteralPath $Root -Force)) {
     if ($allowedTopLevel -notcontains $entry.Name) {

@@ -21,7 +21,7 @@ Include:
 
 ## Privileged operations
 
-CodexKit Sync can:
+Codex SyncKit can:
 
 - create directory links or junctions
 - install hook definitions and hook scripts
@@ -53,4 +53,3 @@ local release gate.
 
 Release archives are accompanied by SHA-256 checksum files. This project does
 not bundle Node.js, PowerShell, OneDrive, Codex, or ChatGPT binaries.
-

@@ -41,7 +41,6 @@ contains no secret. Protect the OneDrive account and review data before sharing.
 
 ## Telemetry
 
-CodexKit Sync does not add telemetry or transmit analytics. OneDrive, Codex,
+Codex SyncKit does not add telemetry or transmit analytics. OneDrive, Codex,
 ChatGPT, PowerShell, Node.js, and the operating system remain governed by their
 own policies.
-
