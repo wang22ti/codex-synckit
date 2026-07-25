@@ -75,8 +75,11 @@ function Invoke-StateSync($Fixture, [string]$Mode) {
 }
 
 try {
-    foreach ($managedLauncher in @("Start-CodexManaged.cmd", "Start-CodexManaged.vbs")) {
-        Assert-True (Test-Path -LiteralPath (Join-Path $sourceKitRoot $managedLauncher) -PathType Leaf) "Missing unified launcher: $managedLauncher"
+    $isPublicSourceTree = Test-Path -LiteralPath (Join-Path $sourceKitRoot "Install-CodexKitSync.ps1") -PathType Leaf
+    if (-not $isPublicSourceTree) {
+        foreach ($managedLauncher in @("Start-CodexManaged.cmd", "Start-CodexManaged.vbs")) {
+            Assert-True (Test-Path -LiteralPath (Join-Path $sourceKitRoot $managedLauncher) -PathType Leaf) "Missing unified launcher: $managedLauncher"
+        }
     }
     foreach ($legacyLauncher in @("Start-CodexResident.cmd", "Start-CodexResident.vbs", "Start-CodexSynced.cmd", "Start-CodexSynced.vbs")) {
         Assert-True (-not (Test-Path -LiteralPath (Join-Path $sourceKitRoot $legacyLauncher))) "Legacy launcher still exists: $legacyLauncher"
@@ -97,10 +100,12 @@ script = root & "\skills\codex-skills\codexkit-sync\scripts\Start-CodexWithSync.
 command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File " & Chr(34) & script & Chr(34)
 shell.Run command, 0, False
 '@
-    $managedCmdText = Normalize-Text (Get-Content -LiteralPath (Join-Path $sourceKitRoot "Start-CodexManaged.cmd") -Raw -Encoding UTF8)
-    $managedVbsText = Normalize-Text (Get-Content -LiteralPath (Join-Path $sourceKitRoot "Start-CodexManaged.vbs") -Raw -Encoding UTF8)
-    Assert-True ($managedCmdText -ceq (Normalize-Text $expectedManagedCmd)) "Root Managed CMD launcher differs from its canonical content"
-    Assert-True ($managedVbsText -ceq (Normalize-Text $expectedManagedVbs)) "Root Managed VBS launcher differs from its canonical content"
+    if (-not $isPublicSourceTree) {
+        $managedCmdText = Normalize-Text (Get-Content -LiteralPath (Join-Path $sourceKitRoot "Start-CodexManaged.cmd") -Raw -Encoding UTF8)
+        $managedVbsText = Normalize-Text (Get-Content -LiteralPath (Join-Path $sourceKitRoot "Start-CodexManaged.vbs") -Raw -Encoding UTF8)
+        Assert-True ($managedCmdText -ceq (Normalize-Text $expectedManagedCmd)) "Root Managed CMD launcher differs from its canonical content"
+        Assert-True ($managedVbsText -ceq (Normalize-Text $expectedManagedVbs)) "Root Managed VBS launcher differs from its canonical content"
+    }
     $exporterText = Get-Content -LiteralPath (Join-Path $sourceScripts "Export-CodexKit.ps1") -Raw -Encoding UTF8
     $normalizedExporter = Normalize-Text $exporterText
     Assert-True ($normalizedExporter.Contains((Normalize-Text $expectedManagedCmd))) "Exporter CMD template differs from the root Managed launcher"
