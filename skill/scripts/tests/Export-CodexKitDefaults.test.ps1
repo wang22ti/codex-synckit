@@ -16,6 +16,7 @@ $sourceMemory = Join-Path $testRoot "source\global-memory"
 $defaultDestination = Join-Path $testRoot "default-kit"
 $optOutDestination = Join-Path $testRoot "opt-out-kit"
 $exporter = Join-Path (Split-Path -Parent $PSScriptRoot) "Export-CodexKit.ps1"
+$syncSkillSource = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 try {
     foreach ($directory in @(
@@ -35,6 +36,7 @@ try {
     Set-Content -LiteralPath (Join-Path $sourceCodex ".codex-global-state.json") -Value '{"projects":{},"thread-projects":{}}' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $sourceCodex "skills\memory-and-improvement\SKILL.md") -Value '# memory subsystem fixture' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $sourceMemory "README.md") -Value '# private global memory fixture' -Encoding UTF8
+    Copy-Item -LiteralPath $syncSkillSource -Destination (Join-Path $sourceCodex "skills\codexkit-sync") -Recurse
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $exporter `
         -SourceCodexHome $sourceCodex `
@@ -59,6 +61,29 @@ try {
     Assert-True ([bool]$defaultManifest.include_sessions) "manifest should record default session inclusion"
     Assert-True ([bool]$defaultManifest.include_desktop_state) "manifest should record default desktop-state inclusion"
     Assert-True ([bool]$defaultManifest.include_memory_subsystem) "manifest should record memory subsystem inclusion"
+
+    $legacyDocuments = Join-Path $testRoot "legacy-profile\Documents"
+    $sharedProjects = Join-Path $defaultDestination "CodexProjects"
+    New-Item -ItemType Directory -Force -Path $legacyDocuments, $sharedProjects | Out-Null
+    Set-Content -LiteralPath (Join-Path $sharedProjects "existing.txt") -Value "preserved" -Encoding UTF8
+    $legacyTarget = Join-Path $legacyDocuments "Codex"
+    cmd /c mklink /J "$legacyTarget" "$sharedProjects" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not create legacy Junction fixture." }
+    $savedUserProfile = $env:USERPROFILE
+    try {
+        $env:USERPROFILE = Join-Path $testRoot "legacy-profile"
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $defaultDestination "Install-CodexKitForWindows.ps1") `
+            -KitRoot $defaultDestination `
+            -DocumentsRoot $legacyDocuments `
+            -InstallCodexProjectsLink `
+            -DisableMemorySubsystem
+        if ($LASTEXITCODE -ne 0) { throw "Legacy project-workspace migration failed with exit code $LASTEXITCODE." }
+    } finally {
+        $env:USERPROFILE = $savedUserProfile
+    }
+    $migratedItem = Get-Item -LiteralPath $legacyTarget -Force
+    Assert-True ($migratedItem.PSIsContainer -and [string]::IsNullOrWhiteSpace([string]$migratedItem.LinkType)) "legacy project Junction should become a real directory"
+    Assert-True (Test-Path -LiteralPath (Join-Path $legacyTarget "existing.txt") -PathType Leaf) "legacy project data should remain available locally"
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $exporter `
         -SourceCodexHome $sourceCodex `

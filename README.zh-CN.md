@@ -15,8 +15,8 @@ Codex SyncKit 通过 OneDrive 连接多台电脑，不需要手工创建目录�
 
 - **🚀 一键启动：** 安装一次后，只需点击开始菜单中的 `ChatGPT` 快捷方式；启动前
   自动准备同步状态，关闭后自动整理。
-- **🔄 同步全面：** 会话历史、侧栏与项目分组、技能、Hooks、全局指令、长期记忆和
-  环境清单都能保持连续，项目工作区与自动化也可按需加入。
+- **🔄 同步全面：** 会话历史、侧栏与项目分组、项目工作区、技能、Hooks、全局
+  指令、长期记忆和环境清单都能保持连续，自动化可按需加入。
 - **🧰 能力也能带走：** Codex 的可复用技能会一起同步，包括用于绘制流程图、架构图、
   示意图等内容的技能；换一台电脑后，不必重新搭建整套工作方法。
 
@@ -59,13 +59,13 @@ flowchart LR
     L["🚀 托管快捷方式<br/>一键启动"] --> A["💻 当前电脑<br/>启动前准备 · 关闭后整理"]
     A <-->|"OneDrive 传输"| K[("☁️ CodexKit<br/>OneDrive 私有目录")]
     K <-->|"OneDrive 传输"| B["💻 另一台电脑<br/>继续会话与工作环境"]
-    K --- D["🧩 会话 · 侧栏 · 技能 · 记忆<br/>可选项目与自动化"]
+    K --- D["🧩 会话 · 侧栏 · 项目 · 技能 · 记忆<br/>自动化可选"]
 ```
 
 1. 面对新的空目录时，安装器创建私有 `CodexKit` 并写入当前电脑选定的数据；
    面对已有同步包时，则直接加入，不把本机旧数据反向导出。
-2. 安装器通过经过验证的目录链接、Hooks 和托管快捷方式，把每台 Windows 电脑
-   连接到这套共享数据。
+2. 安装器通过经过验证的目录链接、受控文件复制、Hooks 和托管快捷方式，把每台
+   Windows 电脑连接到这套共享数据。
 3. 安装过程中必须明确选择是否加入长期记忆子系统；直接按回车不会选择任何
    选项。
 4. OneDrive 负责传输文件；Codex SyncKit 负责 Codex 专用的目录结构、校验、
@@ -91,7 +91,7 @@ OneDrive 私有同步包中的位置。
 | 长期记忆子系统 | 安装时询问 | 子系统代码安装为 Codex 技能；私人记忆保存在项目 `.learnings` 和 `%USERPROFILE%\global-memory` | 负责记录、读取、整理和维护跨会话、跨项目的事实与经验 |
 | 会话历史 | 开启 | `.codex\sessions`、`.codex\archived_sessions`、`.codex\session_index.jsonl` → `CodexKit\session-data` | 完整的当前及归档对话和标题索引，让另一台电脑能够重新打开并继续 |
 | 侧栏和项目分组 | 开启 | `.codex\.codex-global-state.json` 中可跨设备使用的字段 → `CodexKit\desktop-state` | 任务标题、项目分组、任务属于哪个项目、描述、置顶和排序；**不包含项目的实际文件** |
-| 项目工作区文件 | 可选 | `Documents\Codex` → `CodexKit\CodexProjects` | 硬盘上的真实文件夹和文件，包括源代码、文档、`.git`、`.agents` 和项目级 `.codex` 设置 |
+| 项目工作区文件 | 开启 | `Documents\Codex` ⇄ `CodexKit\CodexProjects` | 托管启动前拉取、退出后推送；本机目录保持为 Codex 要求的真实目录，同步源代码、文档、`.git`、`.agents` 和项目级 `.codex` 设置 |
 | Codex 自动化 | 可选 | `.codex\automations` → `CodexKit\automations` | `automation.toml` 等自动化定义及其 `memory.md`；同一个共享计划只应由一台指定电脑执行 |
 | 设备环境清单 | 开启 | 扫描当前电脑 → `CodexKit\environment\devices\<电脑名>.json` | 记录已安装工具及版本，用于比较电脑差异；不会安装或复制应用程序 |
 | 插件清单 | 开启 | 读取 `.codex\plugins\cache` 中的名称和版本 → `CodexKit\plugins\inventory.json` | 用于提示另一台电脑缺少哪些插件；不会复制插件程序和缓存 |
@@ -103,11 +103,11 @@ OneDrive 私有同步包中的位置。
 - **长期记忆**
   - 由随项目提供的 [`memory-and-improvement`](subsystems/memory-and-improvement/README.zh-CN.md) 子系统管理，不是简单复制一个文件夹。
   - 项目记忆保存在 `.learnings`；跨项目记忆保存在 `global-memory`。
-  - 项目 `.learnings` 只有在项目位于 OneDrive，或开启项目工作区同步时，才会跨电脑传输。
+  - 位于默认无项目工作区中的 `.learnings` 会随项目工作区同步；其他位置的项目仍需自行放入 OneDrive。
 - **侧栏与项目工作区**
   - “侧栏和项目分组”同步项目和任务在 ChatGPT 中的显示与组织。
   - “项目工作区文件”同步硬盘上的真实文件夹和文件。
-  - 即使未开启项目工作区文件同步，项目仍可能出现在另一台电脑的侧栏中。
+  - 共享状态中的默认工作区路径以可移植形式保存，拉取后再转换为当前电脑的本机路径。
 - **隐私**
   - 会话历史、记忆、侧栏组织、环境报告和配置快照可能包含提示词、回答、长期事实、项目名称、软件信息和本地路径。
   - 请保持生成的 `CodexKit` 目录为私有目录，并阅读[隐私说明](docs/PRIVACY.md)了解数据边界。

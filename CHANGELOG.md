@@ -7,6 +7,11 @@
   dedicated technical references.
 - Made the `UserPromptSubmit` memory hook fully reminder-only, including
   user-profile prompts; recall and reflection remain main-session decisions.
+- Replaced the projectless-workspace Junction with controlled Pull/Push
+  synchronization so current Codex desktop builds can create projectless
+  tasks while workspace files still move through OneDrive.
+- Made projectless workspace paths portable inside shared desktop state and
+  added conflict detection, quarantine, migration, and regression tests.
 
 ## 0.1.0-alpha - 2026-07-25
 

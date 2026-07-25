@@ -22,6 +22,7 @@ $ThreadCatalogRepairHelper = Join-Path $PSScriptRoot "Repair-CodexThreadCatalog.
 $ThreadCatalogDatabase = Join-Path $CodexHome "state_5.sqlite"
 $SessionsRoot = Join-Path $KitRoot "session-data\sessions"
 $ArchivedSessionsRoot = Join-Path $KitRoot "session-data\archived_sessions"
+$ProjectlessRoot = Join-Path $env:USERPROFILE "Documents\Codex"
 $BaseState = Join-Path $env:USERPROFILE ".local\state\codexkit\desktop-sidebar-merge-base.json"
 $safeDeviceName = ([string]$env:COMPUTERNAME -replace '[^A-Za-z0-9._-]', '_')
 if ([string]::IsNullOrWhiteSpace($safeDeviceName)) { $safeDeviceName = "unknown-device" }
@@ -271,7 +272,8 @@ function Merge-SidebarState([ValidateSet("pull", "push", "merge")][string]$Mode)
             --local-output $generatedLocal `
             --shared-output $generatedShared `
             --base-output $generatedBase `
-            --report-output $generatedReport
+            --report-output $generatedReport `
+            --projectless-root $ProjectlessRoot
         if ($LASTEXITCODE -ne 0) { throw "Sidebar merge helper returned exit code $LASTEXITCODE." }
 
         if ($Mode -ne "push") {
