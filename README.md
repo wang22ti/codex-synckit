@@ -34,9 +34,6 @@ commands to remember.
    Codex-specific layout, installation, validation, backup, and conflict
    safeguards that ordinary folder synchronization does not provide.
 
-Codex SyncKit does not replace OneDrive; it makes Codex safe and practical to
-use on top of OneDrive.
-
 ## What can be synchronized
 
 | Category | Default | What it provides |
@@ -56,20 +53,20 @@ enabled by default because carrying active Codex tasks and their organization
 between PCs is a core purpose of Codex SyncKit. Keep the generated `CodexKit`
 folder private and see [Privacy](docs/PRIVACY.md) for the data boundary.
 
-## Comparison with other approaches
+## Comparison with continuity features in other agents
 
-| Solution | Primary purpose | Understands Codex layout | User setup | Best fit |
-| --- | --- | --- | --- | --- |
-| **Codex SyncKit** | A ready-to-use Codex environment across Windows PCs, transported by OneDrive | Yes | One installer; no Git or manual links | People who want Codex to feel like the same workspace on every PC |
-| [OneDrive](https://support.microsoft.com/en-us/onedrive/sync-your-computer-s-files-and-folders-with-onedrive) alone | Cloud file and folder synchronization | No | You must decide what hidden data to copy and how Codex finds it | Ordinary documents and folders |
-| [Syncthing](https://docs.syncthing.net/intro/getting-started.html) | Direct folder synchronization between paired devices | No | Install on each device, pair device IDs, and select folders | General file sync without relying on a central cloud folder |
-| [chezmoi](https://www.chezmoi.io/what-does-chezmoi-do/) | Declarative dotfile management across machines | No | Learn its source-state, templates, and Git-oriented workflow | Technical users managing cross-platform shell and application configuration |
-| [Git](https://git-scm.com/about) plus custom scripts | Versioned configuration under complete user control | Only what you build | Design the repository, exclusions, links, migration, and conflict rules yourself | Developers who want custom behavior and full history |
+| Solution | Conversation or task continuity | Rules and memory | Cross-device scope |
+| --- | --- | --- | --- |
+| **Codex SyncKit** | Synchronizes complete conversations, task titles, pins, groups, and ordering | Synchronizes skills, hooks, global guidance, and long-term memory | Treats Codex conversations, organization, capabilities, and installation state as one portable environment |
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code/cli-usage) | Continues the latest conversation or resumes one by session ID | [`CLAUDE.md`](https://docs.anthropic.com/en/docs/claude-code/memory) stores project- and user-level guidance | Official features focus on session resume and file-based memory; sharing across PCs still requires moving the relevant files and state |
+| [Cursor](https://docs.cursor.com/en/context/memories) | Memories preserve project context across conversations | Automatically generated, project-scoped Memories | Focuses on agent memory and rules rather than complete conversation, sidebar, plugin, and environment migration |
+| [Windsurf Cascade](https://docs.windsurf.com/windsurf/cascade/memories) | Memories preserve context across conversations | Automatic Memories stay on the current device; shared rules can live in `.windsurf/rules/` or `AGENTS.md` | Automatic Memories do not cross devices; durable sharing primarily uses project files |
+| [Cline](https://docs.cline.bot/core-workflows/task-management) | Saves complete task history and can resume conversations, code changes, commands, and decisions | Context is retained in task history | Task history is stored locally; cross-device use needs a separate storage or synchronization strategy |
 
-General-purpose tools are broader and may be a better choice for general files
-or cross-platform dotfiles. Codex SyncKit is narrower: it packages the
-Codex-specific decisions and safety rules so users do not have to design that
-system themselves.
+Most of these products address session recovery, memory, or reusable rules
+inside one agent. Codex SyncKit instead treats Codex conversations,
+organization, skills, hooks, memory, and installation state as one portable
+environment.
 
 ## Requirements
 

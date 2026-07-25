@@ -31,9 +31,6 @@ PowerShell 命令。
 3. OneDrive 负责在电脑之间传输文件；Codex SyncKit 负责 Codex 专用的目录结构、
    安装、校验、备份和冲突保护。
 
-Codex SyncKit 不会取代 OneDrive，而是在 OneDrive 之上补齐 Codex 同步所需的
-专用逻辑。
-
 ## 可以同步什么
 
 | 类别 | 默认状态 | 作用 |
@@ -52,19 +49,19 @@ Codex SyncKit 不会取代 OneDrive，而是在 OneDrive 之上补齐 Codex 同�
 Codex SyncKit 的核心用途，因此它们默认开启。请保持生成的 `CodexKit` 目录为
 私有目录，并阅读[隐私说明](docs/PRIVACY.md)了解数据边界。
 
-## 与其他方案对比
+## 与其他 Agent 的状态延续方式对比
 
-| 方案 | 主要用途 | 是否理解 Codex 结构 | 用户需要做什么 | 更适合 |
-| --- | --- | --- | --- | --- |
-| **Codex SyncKit** | 借助 OneDrive，让多台 Windows 电脑拥有可直接使用的同一套 Codex 环境 | 是 | 运行一次安装器；不需要 Git 或手工链接 | 希望每台电脑上的 Codex 都像同一个工作区的用户 |
-| 单独使用 [OneDrive](https://support.microsoft.com/en-us/onedrive/sync-your-computer-s-files-and-folders-with-onedrive) | 云端文件和文件夹同步 | 否 | 自己判断隐藏数据、复制范围以及怎样让 Codex 使用这些文件 | 普通文档和文件夹 |
-| [Syncthing](https://docs.syncthing.net/intro/getting-started.html) | 在配对设备之间直接同步文件夹 | 否 | 每台设备安装、交换设备 ID、选择同步文件夹 | 不希望依赖中心云目录的一般文件同步 |
-| [chezmoi](https://www.chezmoi.io/what-does-chezmoi-do/) | 跨机器声明式管理 dotfiles | 否 | 理解源状态、模板和偏 Git 的工作流 | 管理跨平台 Shell 与应用配置的技术用户 |
-| [Git](https://git-scm.com/about) 加自定义脚本 | 完全由用户控制的版本化配置 | 只理解你自己实现的部分 | 自己设计仓库、排除规则、目录链接、迁移与冲突处理 | 需要完全自定义和完整历史的开发者 |
+| 方案 | 对话或任务延续 | 规则与记忆 | 跨设备范围 |
+| --- | --- | --- | --- |
+| **Codex SyncKit** | 同步完整会话、任务标题、置顶、分组和排序 | 同步技能、Hooks、全局指导和长期记忆 | 将 Codex 会话、组织状态、能力配置和安装状态作为一套可迁移环境统一处理 |
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code/cli-usage) | 可继续最近的会话或按会话 ID 恢复 | 通过 [`CLAUDE.md`](https://docs.anthropic.com/zh-CN/docs/claude-code/memory) 保存项目和用户级指导 | 官方功能侧重会话恢复与文件化记忆；跨电脑共享仍需另行传输相关文件和状态 |
+| [Cursor](https://docs.cursor.com/en/context/memories) | Memories 可在同一项目的不同会话间保留上下文 | 自动生成并按项目管理 Memories | 侧重 Agent 记忆与规则，不是完整的会话、侧边栏、插件和环境迁移方案 |
+| [Windsurf Cascade](https://docs.windsurf.com/zh/windsurf/cascade/memories) | Memories 可跨对话保留上下文 | 自动 Memories 保存在当前设备；共享规则可写入 `.windsurf/rules/` 或 `AGENTS.md` | 自动 Memories 不跨设备，持久共享主要依赖项目文件 |
+| [Cline](https://docs.cline.bot/core-workflows/task-management) | 保存完整任务历史，可恢复对话、代码改动、命令和决策 | 上下文保存在任务历史中 | 任务历史保存在本机，跨设备使用需要额外的存储或同步方案 |
 
-通用工具覆盖面更广，可能更适合一般文件或跨平台 dotfiles。Codex SyncKit 的范围
-更窄：它预先处理了 Codex 特有的路径、安装方式和安全规则，用户不必自己设计整套
-系统。
+这些产品大多解决单一 Agent 内的会话恢复、记忆或规则复用；Codex SyncKit 的重点
+是把 Codex 的会话、组织状态、技能、Hooks、记忆和安装状态作为一套可迁移环境
+统一处理。
 
 ## 系统要求
 
