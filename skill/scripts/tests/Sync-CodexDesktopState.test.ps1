@@ -76,7 +76,7 @@ function Invoke-StateSync($Fixture, [string]$Mode) {
 }
 
 try {
-    $isPublicSourceTree = Test-Path -LiteralPath (Join-Path $publicSourceRoot "Install-CodexKitSync.ps1") -PathType Leaf
+    $isPublicSourceTree = Test-Path -LiteralPath (Join-Path $publicSourceRoot "Install-CodexSyncKit.ps1") -PathType Leaf
     if (-not $isPublicSourceTree) {
         foreach ($managedLauncher in @("Start-CodexManaged.cmd", "Start-CodexManaged.vbs")) {
             Assert-True (Test-Path -LiteralPath (Join-Path $sourceKitRoot $managedLauncher) -PathType Leaf) "Missing unified launcher: $managedLauncher"

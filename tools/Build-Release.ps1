@@ -17,14 +17,14 @@ $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory).TrimEnd('\')
 & (Join-Path $PSScriptRoot "Test-PublicRelease.ps1") -Root $root
 
 $stageParent = Join-Path ([IO.Path]::GetTempPath()) "codexkit-public-release"
-$stageRoot = Join-Path $stageParent "codexkit-sync-$Version"
+$stageRoot = Join-Path $stageParent "codex-synckit-$Version"
 if (Test-Path -LiteralPath $stageParent) { Remove-Item -LiteralPath $stageParent -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
 
 $copyNames = @(
     ".github", ".gitignore", "CHANGELOG.md", "CODE_OF_CONDUCT.md",
-    "CONTRIBUTING.md", "docs", "Install-CodexKitSync.ps1", "LICENSE",
-    "README.md", "SECURITY.md", "skill", "THIRD_PARTY_NOTICES.md", "tools"
+    "CONTRIBUTING.md", "docs", "Install-CodexSyncKit.ps1", "LICENSE",
+    "README.md", "README.zh-CN.md", "SECURITY.md", "skill", "THIRD_PARTY_NOTICES.md", "tools"
 )
 foreach ($name in $copyNames) {
     $source = Join-Path $root $name
@@ -34,7 +34,7 @@ foreach ($name in $copyNames) {
 }
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
-$zipPath = Join-Path $OutputDirectory "codexkit-sync-$Version.zip"
+$zipPath = Join-Path $OutputDirectory "codex-synckit-$Version.zip"
 if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::CreateFromDirectory($stageParent, $zipPath, [IO.Compression.CompressionLevel]::Optimal, $false)
@@ -46,4 +46,3 @@ Remove-Item -LiteralPath $stageParent -Recurse -Force
 
 Write-Host "[OK] release ZIP: $zipPath" -ForegroundColor Green
 Write-Host "[OK] SHA-256: $hashPath" -ForegroundColor Green
-

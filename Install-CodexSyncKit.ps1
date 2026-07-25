@@ -135,5 +135,5 @@ if ($Recommended) {
     if ($LASTEXITCODE -ne 0) { throw "Recommended installation failed with exit code $LASTEXITCODE." }
 }
 
-Write-Host "CodexKit Sync setup complete." -ForegroundColor Green
+Write-Host "Codex SyncKit setup complete." -ForegroundColor Green
 Write-Host "Private kit: $DestinationRoot"

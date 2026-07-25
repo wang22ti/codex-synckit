@@ -1,6 +1,6 @@
 # Uninstall and rollback
 
-CodexKit Sync preserves existing targets as timestamped
+Codex SyncKit preserves existing targets as timestamped
 `<target>.backup.<timestamp>` entries before replacing them.
 
 Because an installation can include different optional links, the alpha release
@@ -25,4 +25,3 @@ To roll back safely:
 
 Do not delete the OneDrive CodexKit first. It may be the live source behind
 directory links.
-
