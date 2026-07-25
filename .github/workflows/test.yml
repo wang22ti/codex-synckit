@@ -8,7 +8,7 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Public release gate
         shell: powershell
         run: .\tools\Test-PublicRelease.ps1
@@ -18,4 +18,3 @@ jobs:
       - name: PowerShell end-to-end tests
         shell: powershell
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\skill\scripts\tests\Sync-CodexDesktopState.test.ps1
-
