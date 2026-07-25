@@ -179,7 +179,7 @@ assert_not_contains "$HOOKS_SETUP" "enforced automatically"
 assert_contains "$README_EN" "references/maintainer-reference.md"
 assert_contains "$README_ZH" "references/maintainer-reference.md"
 assert_contains "$HOOKS_SETUP" "UserPromptSubmit"
-assert_contains "$HOOKS_SETUP" "auto-run a previous-turn reflect check"
+assert_contains "$HOOKS_SETUP" "does not run the advisory reflect helper automatically"
 assert_file "$SKILL_DIR/scripts/hooks/user-prompt-recall-reminder.sh"
 assert_contains "$SKILL_DIR/scripts/hooks/user-prompt-recall-reminder.sh" "install-nightly-maintenance.sh --apply"
 assert_contains "$MAINTAINER_REF" 'scripts/maintenance/install-nightly-maintenance.sh --apply'

@@ -57,7 +57,7 @@
    在遵守召回到的约束和 repo 约定的前提下答复或执行。
 4. Reflect
    在有意义的工作产出之后，先做显式的 reflect decision。
-   要么运行结构化 reflect check，要么由下一次 `UserPromptSubmit` hook 在发现上一轮还没 reflect 时自动补跑 `reflect-memory.sh`。
+   如果本轮产生了有意义的工作产出，应在最终回答前运行结构化 reflect check。`UserPromptSubmit` hook 只负责提醒主会话，不会自动运行反思。
 
 严格版运行标准：
 
@@ -80,7 +80,7 @@
 
 - 专门的 recall helper 现在已经有了，也就是 `scripts/recall/recall-memory.sh`
 - 专门的 reflect helper 现在已经有了，也就是 `scripts/recall/reflect-memory.sh`
-- 当前 hook 配置会在 `SessionStart` 时注入运行时 guidance，并在 `UserPromptSubmit` 时为上一轮未 reflect 的已完成 turn 自动补跑 `reflect-memory.sh`
+- 当前 hook 配置会在 `SessionStart` 时注入运行时 guidance，并在 `UserPromptSubmit` 时提醒主会话回答前 recall、最终回答前 reflect
 - `suggest-promotions.sh` 和 `reflect-memory.sh` 都是 advisory helper，而 nightly organize/writeback 仍然只是 supportive distillation，不是 authoritative promotion
 - `scripts/maintenance/update-skill-policy.sh` 是唯一允许自动改写 `SKILL.md` 的路径，而且只允许改受管的 routing-strategy 区块，不会改整份 skill 本体
 
@@ -658,7 +658,7 @@ bash ~/.codex/skills/memory-and-improvement/scripts/bootstrap/init-memory.sh --s
 
 ### `scripts/recall/reflect-memory.sh`
 
-用于有意义工作产出之后的 advisory reflect 入口，也用于 `UserPromptSubmit` 触发的上一轮自动补 reflect。
+用于有意义工作产出之后的 advisory reflect 入口。是否运行由主会话判断，hook 只负责提醒。
 
 职责：
 
