@@ -29,14 +29,15 @@ Codex SyncKit can:
 - optionally create or remove a scheduled task
 - migrate selected local directories after preflight verification
 
-Review scripts before running them. `-Recommended` deliberately excludes
-sessions, desktop state, automations, profiles, and the maintenance task.
+Review scripts before running them. `-Recommended` includes sessions and
+desktop organization because cross-PC task continuity is a core feature. It
+still excludes automations, profiles, and the maintenance task.
 
 ## Secrets and private data
 
 Never publish a generated CodexKit. Generated packages can contain global
 memory, project metadata, device inventories, hook paths, automation memory,
-and—when explicitly enabled—complete session transcripts.
+complete session transcripts, and desktop organization.
 
 The public source release is built from an allowlist and is checked for:
 

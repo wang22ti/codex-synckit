@@ -14,8 +14,12 @@ Use the bundled `scripts/Export-CodexKit.ps1` as the canonical exporter.
 - Export MiniMax skills to `skills\minimax-skills`.
 - Export Agents skills to `skills\agents-skills`.
 - Include hooks, sanitized profiles, per-device environment inventories, global memory, plugin inventory, and memory-task settings.
-- Exclude credentials, logs, caches, machine approval rules, and sessions.
-- Never add `-IncludeSessions` unless the user explicitly requests session export after being warned about privacy and concurrent-write conflicts.
+- Include conversation history, its title index, and desktop sidebar/project
+  organization so cross-machine task continuity works by default.
+- Exclude credentials, logs, caches, machine approval rules, and the Codex
+  SQLite state database.
+- Use `-ExcludeSessions` or `-ExcludeDesktopState` only when the user explicitly
+  opts out after understanding which continuity features will be unavailable.
 
 ## Export Or Rebuild
 
@@ -30,7 +34,7 @@ For a clean rebuild:
 1. Resolve and verify the OneDrive root.
 2. Restrict deletion to the exact `CodexKit` directory and explicitly named `CodexKit-backup-*` directories.
 3. Delete only after the user explicitly requests cleanup or replacement.
-4. Run the exporter without `-IncludeSessions`.
+4. Run the exporter with its default conversation and desktop-state export.
 5. Verify `manifest.json`, warnings, skill buckets, global memory, and scheduled-task files.
 
 ## Install On Windows
@@ -41,13 +45,13 @@ For the normal setup, use the unified recommended mode:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\OneDrive\CodexKit\Install-CodexKitForWindows.ps1" -Recommended
 ```
 
-`-Recommended` installs the three skill links, global guidance links, hooks, linked global memory, captures the current device environment inventory, and installs a CodexKit-managed ChatGPT Start menu shortcut. It deliberately excludes profiles, Codex configuration, sessions, Codex automations, and the memory-maintenance scheduled task. Model, reasoning, feature, and other Codex preferences are selected locally on each machine. `environment\devices\<computer>.json` is a comparison snapshot, not an application or WSL migration mechanism.
+`-Recommended` installs the three skill links, conversation links, global guidance links, hooks, linked global memory, captures the current device environment inventory, and installs a CodexKit-managed ChatGPT Start menu shortcut. Conversation history and desktop sidebar/project organization are part of the normal setup; desktop organization uses the managed launcher's controlled Pull/Push lifecycle. Profiles, Codex configuration, Codex automations, and the memory-maintenance scheduled task remain excluded. Model, reasoning, feature, and other Codex preferences are selected locally on each machine. `environment\devices\<computer>.json` is a comparison snapshot, not an application or WSL migration mechanism.
 
 The user-visible shortcut name is always `ChatGPT`, and every machine launches `Start-CodexManaged.vbs`. There are no Resident/Synced machine roles. `-InstallResidentStartMenuShortcut` remains accepted only for command-line compatibility and installs the same Managed shortcut. The memory-maintenance task may still belong to one designated automation host, but that does not change its launcher behavior. `-Repair` converts legacy launcher targets to Managed while refreshing the current Appx icon. Legacy `Codex.lnk` and older mode-labeled shortcuts are removed only when their arguments point to this KitRoot's launchers.
 
 Install the memory-maintenance task only on the single designated maintenance host by explicitly adding `-InstallMemoryTask`. On other machines, remove an accidentally installed task with `-RemoveMemoryTask`.
 
-Do not add `-InstallSessionLinks` by default.
+Install session links by default when the shared session data is present.
 
 The optional default-project redirect uses `CodexKit\CodexProjects` as the
 OneDrive-backed source and the current Windows Documents folder's `Codex`
@@ -172,9 +176,15 @@ Use `-BackupRetention 0` only when no rollback copy should remain. The cleanup i
 
 ## Managed Stale Files
 
-Each export compares the previous `manifest.json` with the files produced by the current run. Files managed by the previous export but absent from the current export are removed. This keeps deleted skills and previously enabled session/raw-config exports from lingering in OneDrive.
+Each export compares the previous `manifest.json` with the files produced by
+the current run. Reusable package files managed by the previous export but
+absent from the current export are removed. Conversation and desktop-state
+data are never stale-cleaned, including after an explicit opt-out; remove those
+private data trees only through a separate, exact-target operation.
 
 Only paths recorded in the previous manifest are eligible for cleanup. Hand-created files and directories that were never managed by the exporter are preserved.
+If hashing or reading a managed file fails, protect its relative path from
+stale cleanup for that run.
 
 Confirm:
 
@@ -187,7 +197,9 @@ Confirm:
 - after a real prompt, `.local\state\memory-and-improvement\user-prompt-hook.last-run.json` exists and its `source` is `codex`, not `codexkit-self-test`.
 - `global-memory` is a directory link targeting `CodexKit\global-memory`.
 - On the designated maintenance host only, `Codex Memory Maintenance` is `Ready`; manually trigger it when testing and require result `0`. Other machines should normally report the task as optional/missing.
-- local `sessions` and `archived_sessions` remain ordinary directories unless the user explicitly enabled session links.
+- local `sessions`, `archived_sessions`, and `session_index.jsonl` link to the
+  shared session data after recommended installation, unless session export was
+  explicitly disabled.
 - when default-project synchronization is enabled, the Windows Documents
   `Codex` directory is a directory link targeting `CodexKit\CodexProjects`.
 - when automation synchronization is enabled, `.codex\automations` is a
@@ -199,19 +211,24 @@ Confirm:
 
 Session JSONL files can contain complete conversations, local paths, pasted credentials, and private data. OneDrive synchronization can produce conflicts when the same conversation is actively edited on two machines.
 
-Only after explicit informed approval:
+Conversation history is exported by default. To opt out:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "<skill>\scripts\Export-CodexKit.ps1" -IncludeSessions -Force
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "<skill>\scripts\Export-CodexKit.ps1" -ExcludeSessions -Force
 ```
 
-Prefer one-time export over live session junctions unless the user explicitly needs cross-machine continuity. If live links are requested, install with `-Recommended -InstallSessionLinks` on the first machine or `-Repair -InstallSessionLinks` on an already installed machine after exporting with `-IncludeSessions -Force`.
+The recommended installation links live session data because cross-machine
+continuity is a core feature. Do not actively edit the same conversation on
+two machines, and wait for OneDrive before continuing it elsewhere.
 
 The installer reports session link state in `-Status`, creates links only after `session-data\sessions`, `session-data\archived_sessions`, and `session-data\session_index.jsonl` exist, and prints OneDrive conflict guidance. Every machine uses the same Managed lifecycle. The running-device marker is advisory; do not actively edit the same conversation on two machines, and wait for OneDrive before opening a conversation that was just updated elsewhere.
 
-Session links include `.codex\session_index.jsonl` because it stores thread-title metadata. Do not live-link `.codex\.codex-global-state.json` by default; it influences sidebar projects, prompt history, pinned state, workspace hints, and desktop host state, so treat it as a separate optional desktop-state sync decision.
+Session links include `.codex\session_index.jsonl` because it stores thread-title metadata. Do not live-link `.codex\.codex-global-state.json` by default; it influences sidebar projects, prompt history, pinned state, workspace hints, and desktop host state. The default managed launcher synchronizes its portable organizational fields through controlled Pull/Push instead.
 
-When the user explicitly wants the desktop sidebar/project state synchronized, export with `-IncludeDesktopState` and install with `-InstallDesktopStateLink`. The shared file lives at `desktop-state\.codex-global-state.json`, and the installer should report it in `-Status`.
+Desktop sidebar/project state is also exported by default. The shared file
+lives at `desktop-state\.codex-global-state.json`; use the managed launcher's
+controlled Pull/Push lifecycle rather than requiring a live single-file link.
+Use `-ExcludeDesktopState` only for an explicit opt-out.
 
 Codex desktop may atomically replace `.codex-global-state.json`, which can break single-file symlinks or hardlinks after installation. If the live desktop-state link does not persist, prefer controlled copy sync through the root `Switch-CodexMachine.cmd`: run `-Action Push` after closing Codex on the machine just used, wait for OneDrive, then run `-Action Pull` before opening Codex on the next machine.
 

@@ -10,3 +10,7 @@
 - Added Windows CI for PowerShell parsing and regression tests.
 - Added manifest drift checks for core CodexKit files.
 - Documented privacy, security, compatibility, and uninstall boundaries.
+- Made conversation and desktop-organization synchronization part of the
+  default recommended setup, with explicit opt-out switches.
+- Prevented stale-file cleanup from deleting conversation or desktop-state
+  data, including when a file cannot be hashed while ChatGPT is using it.
