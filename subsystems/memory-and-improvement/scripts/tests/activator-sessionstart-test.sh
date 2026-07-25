@@ -70,14 +70,10 @@ env \
 {"hook_event_name":"SessionStart"}
 EOF
 
-if [[ ! -d "$PROJECT_ROOT/.learnings" ]]; then
-    printf 'Expected SessionStart to initialize %s\n' "$PROJECT_ROOT/.learnings" >&2
+if [[ -d "$PROJECT_ROOT/.learnings" ]]; then
+    printf 'Expected fail-open SessionStart not to initialize %s\n' "$PROJECT_ROOT/.learnings" >&2
     exit 1
 fi
-
-assert_exists "$PROJECT_ROOT/.learnings/SUMMARY.md"
-assert_exists "$PROJECT_ROOT/.learnings/LEARNINGS.md"
-assert_exists "$PROJECT_ROOT/.learnings/assets/INDEX.md"
 
 NON_REPO_ROOT="$TMP_ROOT/non-repo"
 NON_REPO_STATE_ROOT="$TMP_ROOT/non-repo-state"

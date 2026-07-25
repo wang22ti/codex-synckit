@@ -10,6 +10,8 @@ param(
     [switch]$InstallSessionLinks,
     [switch]$InstallMemorySubsystem,
     [switch]$SkipMemorySubsystem,
+    [ValidateSet("Auto", "Initialize", "Join")]
+    [string]$KitMode = "Auto",
     # Retained for compatibility with earlier alpha commands. The private-data
     # boundary is now documented rather than gated because continuity is on by default.
     [switch]$AcceptPrivateDataRisk,
@@ -54,14 +56,6 @@ function Read-RequiredMemorySubsystemChoice {
     }
 }
 
-$memorySubsystemEnabled = if ($InstallMemorySubsystem) {
-    $true
-} elseif ($SkipMemorySubsystem) {
-    $false
-} else {
-    Read-RequiredMemorySubsystemChoice
-}
-
 function Resolve-FullPath([string]$Path) {
     return [IO.Path]::GetFullPath($Path).TrimEnd('\')
 }
@@ -72,6 +66,124 @@ function Get-OneDriveRoot {
     }
     return (Join-Path $env:USERPROFILE "OneDrive")
 }
+
+if ([string]::IsNullOrWhiteSpace($DestinationRoot)) {
+    $DestinationRoot = Join-Path (Get-OneDriveRoot) "CodexKit"
+}
+$DestinationRoot = Resolve-FullPath $DestinationRoot
+
+if (Test-Path -LiteralPath $DestinationRoot -PathType Leaf) {
+    throw "CodexKit destination is a file, not a directory: $DestinationRoot"
+}
+
+$manifestPath = Join-Path $DestinationRoot "manifest.json"
+$generatedInstaller = Join-Path $DestinationRoot "Install-CodexKitForWindows.ps1"
+$destinationExists = Test-Path -LiteralPath $DestinationRoot -PathType Container
+$destinationHasEntries = $destinationExists -and
+    (@(Get-ChildItem -LiteralPath $DestinationRoot -Force).Count -gt 0)
+$hasManifest = Test-Path -LiteralPath $manifestPath -PathType Leaf
+$existingManifest = $null
+
+if ($hasManifest) {
+    try {
+        $existingManifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    } catch {
+        throw "Existing CodexKit manifest is unreadable: $manifestPath. Refusing to modify the shared directory."
+    }
+}
+
+function Assert-ExistingKitInstallerIntegrity {
+    $manifestProperties = @($existingManifest.PSObject.Properties.Name)
+    $hasProductIdentity = $manifestProperties -contains "product" -or
+        $manifestProperties -contains "manifest_version"
+    if ($hasProductIdentity) {
+        if ($manifestProperties -notcontains "product" -or
+            $manifestProperties -notcontains "manifest_version" -or
+            [string]$existingManifest.product -ne "codex-synckit" -or
+            [int]$existingManifest.manifest_version -ne 1) {
+            throw "Existing manifest is not a supported Codex SyncKit manifest. Re-export it with the current release before joining."
+        }
+    } else {
+        Write-Host "[INFO] legacy CodexKit manifest detected; installer hash verification is still required" -ForegroundColor DarkCyan
+    }
+    if ($manifestProperties -notcontains "files") {
+        throw "Existing CodexKit manifest does not contain file integrity records. Re-export it before joining."
+    }
+    $installerEntry = @($existingManifest.files | Where-Object {
+        ([string]$_.path).Replace('/', '\').TrimStart('\').Equals(
+            "Install-CodexKitForWindows.ps1",
+            [StringComparison]::OrdinalIgnoreCase
+        )
+    } | Select-Object -First 1)
+    if ($installerEntry.Count -ne 1) {
+        throw "Existing CodexKit manifest does not contain an installer integrity record. Re-export it before joining."
+    }
+    $expectedHash = [string]$installerEntry[0].sha256
+    if ($expectedHash -notmatch '^[0-9A-Fa-f]{64}$') {
+        throw "Existing CodexKit installer integrity record is invalid. Refusing to execute the shared installer."
+    }
+    $actualHash = (Get-FileHash -LiteralPath $generatedInstaller -Algorithm SHA256).Hash
+    if (-not $actualHash.Equals($expectedHash, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Existing CodexKit installer does not match manifest.json. Refusing to execute a changed shared installer."
+    }
+}
+
+$resolvedKitMode = switch ($KitMode) {
+    "Join" {
+        if (-not $hasManifest) {
+            throw "-KitMode Join requires an existing CodexKit manifest: $manifestPath"
+        }
+        "Join"
+    }
+    "Initialize" {
+        if ($destinationHasEntries) {
+            throw "-KitMode Initialize requires a new or empty destination. Move or rename the existing directory first: $DestinationRoot"
+        }
+        "Initialize"
+    }
+    default {
+        if ($hasManifest) {
+            "Join"
+        } elseif ($destinationHasEntries) {
+            throw "The destination is not empty and has no CodexKit manifest. Refusing to guess or overwrite it: $DestinationRoot"
+        } else {
+            "Initialize"
+        }
+    }
+}
+
+if ($resolvedKitMode -eq "Join" -and
+    -not (Test-Path -LiteralPath $generatedInstaller -PathType Leaf)) {
+    throw "Existing CodexKit is incomplete: missing installer $generatedInstaller. Refusing to export local state over it."
+}
+if ($resolvedKitMode -eq "Join") {
+    Assert-ExistingKitInstallerIntegrity
+}
+
+$memorySubsystemEnabled = if ($InstallMemorySubsystem) {
+    $true
+} elseif ($SkipMemorySubsystem) {
+    $false
+} else {
+    Read-RequiredMemorySubsystemChoice
+}
+
+if ($resolvedKitMode -eq "Join") {
+    $sharedMemoryEnabled = if ($existingManifest.PSObject.Properties.Name -contains "include_memory_subsystem") {
+        [bool]$existingManifest.include_memory_subsystem
+    } else {
+        (Test-Path -LiteralPath (Join-Path $DestinationRoot "global-memory") -PathType Container) -and
+        (Test-Path -LiteralPath (Join-Path $DestinationRoot "skills\codex-skills\memory-and-improvement") -PathType Container)
+    }
+    if ($memorySubsystemEnabled -and -not $sharedMemoryEnabled) {
+        throw "The existing CodexKit was created without the memory subsystem. Joining must not modify shared data. Choose N, or enable memory from the machine that owns the shared Kit."
+    }
+    if (-not $memorySubsystemEnabled -and $sharedMemoryEnabled) {
+        Write-Host "[INFO] shared memory data exists; it will remain untouched and local memory integration will stay disabled" -ForegroundColor DarkCyan
+    }
+}
+
+Write-Host "CodexKit setup mode: $resolvedKitMode" -ForegroundColor Cyan
 
 function Get-TreeFingerprint([string]$Path) {
     $root = Resolve-FullPath $Path
@@ -190,24 +302,26 @@ if (-not $DryRun) {
     Write-Host "[DRY] long-term memory subsystem was explicitly skipped" -ForegroundColor DarkCyan
 }
 
-if ([string]::IsNullOrWhiteSpace($DestinationRoot)) {
-    $DestinationRoot = Join-Path (Get-OneDriveRoot) "CodexKit"
-}
-$exporter = if ($DryRun) { $sourceExporter } else { Join-Path $targetSkill "scripts\Export-CodexKit.ps1" }
-$exportArguments = @(
-    "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $exporter,
-    "-DestinationRoot", $DestinationRoot, "-Force"
-)
-if ($IncludeSessions) { $exportArguments += "-IncludeSessions" }
-if ($IncludeDesktopState) { $exportArguments += "-IncludeDesktopState" }
-if ($ExcludeSessions) { $exportArguments += "-ExcludeSessions" }
-if ($ExcludeDesktopState) { $exportArguments += "-ExcludeDesktopState" }
-if ($memorySubsystemEnabled) { $exportArguments += "-IncludeMemorySubsystem" }
-else { $exportArguments += "-ExcludeMemorySubsystem" }
-if ($DryRun) { $exportArguments += "-DryRun" }
+if ($resolvedKitMode -eq "Initialize") {
+    $exporter = if ($DryRun) { $sourceExporter } else { Join-Path $targetSkill "scripts\Export-CodexKit.ps1" }
+    $exportArguments = @(
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $exporter,
+        "-DestinationRoot", $DestinationRoot
+    )
+    if ($IncludeSessions) { $exportArguments += "-IncludeSessions" }
+    if ($IncludeDesktopState) { $exportArguments += "-IncludeDesktopState" }
+    if ($ExcludeSessions) { $exportArguments += "-ExcludeSessions" }
+    if ($ExcludeDesktopState) { $exportArguments += "-ExcludeDesktopState" }
+    if ($memorySubsystemEnabled) { $exportArguments += "-IncludeMemorySubsystem" }
+    else { $exportArguments += "-ExcludeMemorySubsystem" }
+    if ($DryRun) { $exportArguments += "-DryRun" }
 
-& powershell.exe @exportArguments
-if ($LASTEXITCODE -ne 0) { throw "CodexKit export failed with exit code $LASTEXITCODE." }
+    & powershell.exe @exportArguments
+    if ($LASTEXITCODE -ne 0) { throw "CodexKit initialization failed with exit code $LASTEXITCODE." }
+} else {
+    Write-Host "[JOIN] existing shared CodexKit detected" -ForegroundColor Green
+    Write-Host "[JOIN] local sessions, sidebar state, skills, and memory will not be exported over shared data" -ForegroundColor Green
+}
 
 if ($DryRun) {
     Write-Host "Dry run complete. No skill or CodexKit files were changed." -ForegroundColor Cyan
@@ -215,7 +329,6 @@ if ($DryRun) {
 }
 
 if ($Recommended) {
-    $generatedInstaller = Join-Path $DestinationRoot "Install-CodexKitForWindows.ps1"
     if (-not (Test-Path -LiteralPath $generatedInstaller -PathType Leaf)) {
         throw "Generated installer is missing: $generatedInstaller"
     }

@@ -20,3 +20,18 @@
   with matching switches for unattended installation.
 - Added a double-click setup entry point and simplified installation to
   download, extract, and launch.
+- Made one-click setup distinguish a new Kit from an existing shared Kit,
+  preventing later PCs from exporting stale local conversations, sidebar
+  state, skills, or memory over OneDrive data.
+- Added fail-closed checks for nonempty unrecognized destinations and
+  initialize/join installer regression coverage.
+- Added issue and pull-request templates with a private security-reporting
+  route.
+- Added full memory-subsystem CI coverage, local Markdown-link validation, and
+  post-build scanning of the extracted Release archive.
+- Added a tag-driven workflow that builds, verifies, and publishes GitHub
+  Release assets.
+- Added a versioned product marker and installer hash check before another PC
+  executes an existing shared Kit installer.
+- Made tag releases wait for the full reusable test workflow and forced Shell
+  and AWK files to retain LF line endings across Windows checkouts.

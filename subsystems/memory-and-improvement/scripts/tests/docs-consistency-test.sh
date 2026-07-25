@@ -7,7 +7,6 @@ SKILL_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 README_EN="$SKILL_DIR/README.md"
 README_ZH="$SKILL_DIR/README.zh-CN.md"
 SKILL_MD="$SKILL_DIR/SKILL.md"
-TODO_MD="$(cd "$SKILL_DIR/.." && pwd)/TODO.md"
 MAINTAINER_REF="$SKILL_DIR/references/maintainer-reference.md"
 HOOKS_SETUP="$SKILL_DIR/references/hooks-setup.md"
 SCRIPTS_DIR="$SKILL_DIR/scripts"
@@ -65,7 +64,6 @@ assert_max_lines() {
 assert_file "$README_EN"
 assert_file "$README_ZH"
 assert_file "$SKILL_MD"
-assert_file "$TODO_MD"
 assert_file "$MAINTAINER_REF"
 assert_file "$HOOKS_SETUP"
 assert_file "$SKILL_DIR/scripts/shared/memory-config.sh"
@@ -167,11 +165,11 @@ for key_name in "${config_keys[@]}"; do
 done
 
 # Human-facing docs should not regress to stale path guidance.
-assert_not_contains "$README_EN" "/home/example/"
-assert_not_contains "$README_ZH" "/home/example/"
-assert_not_contains "$SKILL_MD" "/home/example/"
-assert_not_contains "$MAINTAINER_REF" "/home/example/"
-assert_not_contains "$HOOKS_SETUP" "/home/example/"
+assert_not_contains "$README_EN" "/home/"
+assert_not_contains "$README_ZH" "/home/"
+assert_not_contains "$SKILL_MD" "/home/"
+assert_not_contains "$MAINTAINER_REF" "/home/"
+assert_not_contains "$HOOKS_SETUP" "/home/"
 assert_not_contains "$README_EN" "enforced automatically"
 assert_not_contains "$README_ZH" "自动强制执行"
 assert_not_contains "$SKILL_MD" "enforced automatically"
@@ -235,7 +233,7 @@ for script_name in "${core_scripts[@]}"; do
     assert_contains "$README_EN" "scripts/$script_name"
     assert_contains "$README_ZH" "scripts/$script_name"
     assert_contains "$SKILL_MD" "scripts/$script_name"
-    assert_not_contains "$SCRIPTS_DIR/$script_name" "/home/example/"
+    assert_not_contains "$SCRIPTS_DIR/$script_name" "/home/"
 done
 
 # Shared and hook-only helpers should remain documented in the human-facing READMEs.
@@ -249,7 +247,7 @@ for script_name in "${helper_scripts[@]}"; do
     assert_file "$SCRIPTS_DIR/$script_name"
     assert_contains "$README_EN" "scripts/$script_name"
     assert_contains "$README_ZH" "scripts/$script_name"
-    assert_not_contains "$SCRIPTS_DIR/$script_name" "/home/example/"
+    assert_not_contains "$SCRIPTS_DIR/$script_name" "/home/"
 done
 
 # The consistency check itself should stay documented as a drift detector.
@@ -270,7 +268,7 @@ for script_name in "${shortcut_scripts[@]}"; do
     assert_contains "$README_EN" "scripts/shortcuts/$script_name"
     assert_contains "$README_ZH" "scripts/shortcuts/$script_name"
     assert_contains "$SKILL_MD" "scripts/shortcuts/$script_name"
-    assert_not_contains "$SCRIPTS_DIR/shortcuts/$script_name" "/home/example/"
+    assert_not_contains "$SCRIPTS_DIR/shortcuts/$script_name" "/home/"
 done
 assert_file "$SKILL_DIR/scripts/tests/shortcuts-smoke-test.sh"
 assert_contains "$README_EN" "scripts/tests/shortcuts-smoke-test.sh"

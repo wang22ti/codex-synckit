@@ -4,7 +4,9 @@ Codex-only memory skill for capturing project-local memory, cross-project global
 
 This README is written for a human maintainer. It explains the architecture, the intended workflows, the major scripts, the automation model, and the operational boundaries of the current implementation.
 
-For the compact canonical maintainer policy reference, see [references/maintainer-reference.md](~/.codex/skills/memory-and-improvement/references/maintainer-reference.md). This README stays summary-first on purpose.
+For the compact canonical maintainer policy reference, see
+[references/maintainer-reference.md](references/maintainer-reference.md). This
+README stays summary-first on purpose.
 
 ## What This Skill Is For
 
@@ -254,7 +256,7 @@ One concise way to frame it is:
 
 This README is the human-facing overview, not the full canonical policy document.
 
-Use [references/maintainer-reference.md](~/.codex/skills/memory-and-improvement/references/maintainer-reference.md) when you need the compact source for:
+Use [references/maintainer-reference.md](references/maintainer-reference.md) when you need the compact source for:
 
 - routing boundaries
 - progressive loading order
@@ -1012,15 +1014,15 @@ Thin convenience wrappers live in one place so the script tree stays predictable
 
 Current shortcuts:
 
-- [`scripts/shortcuts/remember-project-fact.sh`](~/.codex/skills/memory-and-improvement/scripts/shortcuts/remember-project-fact.sh)
+- [`scripts/shortcuts/remember-project-fact.sh`](scripts/shortcuts/remember-project-fact.sh)
   - wraps `log-memory.sh` with default `--scope project --type learning --category insight`
-- [`scripts/shortcuts/remember-global-fact.sh`](~/.codex/skills/memory-and-improvement/scripts/shortcuts/remember-global-fact.sh)
+- [`scripts/shortcuts/remember-global-fact.sh`](scripts/shortcuts/remember-global-fact.sh)
   - wraps `log-memory.sh` with default `--scope global --type learning --category insight`
-- [`scripts/shortcuts/remember-error.sh`](~/.codex/skills/memory-and-improvement/scripts/shortcuts/remember-error.sh)
+- [`scripts/shortcuts/remember-error.sh`](scripts/shortcuts/remember-error.sh)
   - wraps `log-memory.sh` with default `--scope project --type error`
-- [`scripts/shortcuts/index-factual-file.sh`](~/.codex/skills/memory-and-improvement/scripts/shortcuts/index-factual-file.sh)
+- [`scripts/shortcuts/index-factual-file.sh`](scripts/shortcuts/index-factual-file.sh)
   - wraps `log-asset.sh` with default `--scope global --type structured_fact_file`
-- [`scripts/shortcuts/index-asset.sh`](~/.codex/skills/memory-and-improvement/scripts/shortcuts/index-asset.sh)
+- [`scripts/shortcuts/index-asset.sh`](scripts/shortcuts/index-asset.sh)
   - wraps `log-asset.sh` with default `--scope project`
 
 Each shortcut forwards additional arguments to the underlying core script, so explicit later flags can still override the defaults when needed.
@@ -1051,7 +1053,7 @@ Creates a skill scaffold from a reusable learning.
 
 It now reads the canonical template block from:
 
-- [`references/SKILL-TEMPLATE.md`](~/.codex/skills/memory-and-improvement/references/SKILL-TEMPLATE.md)
+- [`references/SKILL-TEMPLATE.md`](references/SKILL-TEMPLATE.md)
 
 so the template asset is the real source of truth.
 
@@ -1121,7 +1123,7 @@ cron
 
 The recall and distillation path uses:
 
-- [`scripts/shared/memory-entry-parser.awk`](~/.codex/skills/memory-and-improvement/scripts/shared/memory-entry-parser.awk)
+- [`scripts/shared/memory-entry-parser.awk`](scripts/shared/memory-entry-parser.awk)
 
 This parser extracts:
 
@@ -1473,8 +1475,8 @@ If you maintain this system over time, optimize for consolidation and low-noise 
 
 Use this working order:
 
-1. Update [references/maintainer-reference.md](~/.codex/skills/memory-and-improvement/references/maintainer-reference.md) first when a stable policy changes.
-2. Keep [`SKILL.md`](~/.codex/skills/memory-and-improvement/SKILL.md) limited to runtime behavior and short guardrails.
+1. Update [references/maintainer-reference.md](references/maintainer-reference.md) first when a stable policy changes.
+2. Keep [`SKILL.md`](SKILL.md) limited to runtime behavior and short guardrails.
 3. Keep this README and `README.zh-CN.md` as human-readable summaries rather than full policy dumps.
 
 Keep the script layout disciplined:
@@ -1545,15 +1547,15 @@ That gives you:
 
 ## Related Files
 
-- [`SKILL.md`](~/.codex/skills/memory-and-improvement/SKILL.md)
-- [`scripts/shared/memory-paths.sh`](~/.codex/skills/memory-and-improvement/scripts/shared/memory-paths.sh)
-- [`scripts/capture/log-memory.sh`](~/.codex/skills/memory-and-improvement/scripts/capture/log-memory.sh)
-- [`scripts/recall/review-memory.sh`](~/.codex/skills/memory-and-improvement/scripts/recall/review-memory.sh)
-- [`scripts/maintenance/organize-memory.sh`](~/.codex/skills/memory-and-improvement/scripts/maintenance/organize-memory.sh)
-- [`scripts/maintenance/writeback-memory.sh`](~/.codex/skills/memory-and-improvement/scripts/maintenance/writeback-memory.sh)
-- [`scripts/maintenance/update-skill-policy.sh`](~/.codex/skills/memory-and-improvement/scripts/maintenance/update-skill-policy.sh)
-- [`scripts/maintenance/git-memory.sh`](~/.codex/skills/memory-and-improvement/scripts/maintenance/git-memory.sh)
-- [`scripts/maintenance/nightly-maintenance.sh`](~/.codex/skills/memory-and-improvement/scripts/maintenance/nightly-maintenance.sh)
-- [`scripts/maintenance/install-nightly-maintenance.sh`](~/.codex/skills/memory-and-improvement/scripts/maintenance/install-nightly-maintenance.sh)
-- [`scripts/capture/extract-skill.sh`](~/.codex/skills/memory-and-improvement/scripts/capture/extract-skill.sh)
-- [`references/SKILL-TEMPLATE.md`](~/.codex/skills/memory-and-improvement/references/SKILL-TEMPLATE.md)
+- [`SKILL.md`](SKILL.md)
+- [`scripts/shared/memory-paths.sh`](scripts/shared/memory-paths.sh)
+- [`scripts/capture/log-memory.sh`](scripts/capture/log-memory.sh)
+- [`scripts/recall/review-memory.sh`](scripts/recall/review-memory.sh)
+- [`scripts/maintenance/organize-memory.sh`](scripts/maintenance/organize-memory.sh)
+- [`scripts/maintenance/writeback-memory.sh`](scripts/maintenance/writeback-memory.sh)
+- [`scripts/maintenance/update-skill-policy.sh`](scripts/maintenance/update-skill-policy.sh)
+- [`scripts/maintenance/git-memory.sh`](scripts/maintenance/git-memory.sh)
+- [`scripts/maintenance/nightly-maintenance.sh`](scripts/maintenance/nightly-maintenance.sh)
+- [`scripts/maintenance/install-nightly-maintenance.sh`](scripts/maintenance/install-nightly-maintenance.sh)
+- [`scripts/capture/extract-skill.sh`](scripts/capture/extract-skill.sh)
+- [`references/SKILL-TEMPLATE.md`](references/SKILL-TEMPLATE.md)

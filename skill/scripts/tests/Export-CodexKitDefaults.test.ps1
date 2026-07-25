@@ -50,6 +50,12 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "global-memory\README.md") -PathType Leaf) "default export should include the selected memory subsystem data"
     Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "skills\codex-skills\memory-and-improvement\SKILL.md") -PathType Leaf) "default export should include the selected memory subsystem skill"
     $defaultManifest = Get-Content -LiteralPath (Join-Path $defaultDestination "manifest.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert-True ([string]$defaultManifest.product -eq "codex-synckit") "manifest should identify Codex SyncKit"
+    Assert-True ([int]$defaultManifest.manifest_version -eq 1) "manifest should record its schema version"
+    Assert-True (@($defaultManifest.files | Where-Object {
+        [string]$_.path -eq "Install-CodexKitForWindows.ps1" -and
+        [string]$_.sha256 -match '^[0-9A-Fa-f]{64}$'
+    }).Count -eq 1) "manifest should record the generated installer hash"
     Assert-True ([bool]$defaultManifest.include_sessions) "manifest should record default session inclusion"
     Assert-True ([bool]$defaultManifest.include_desktop_state) "manifest should record default desktop-state inclusion"
     Assert-True ([bool]$defaultManifest.include_memory_subsystem) "manifest should record memory subsystem inclusion"

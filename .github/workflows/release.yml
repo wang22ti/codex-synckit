@@ -1,0 +1,46 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  tests:
+    uses: ./.github/workflows/test.yml
+
+  release:
+    needs: tests
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Build and verify release archive
+        shell: powershell
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart("v")
+          .\tools\Build-Release.ps1 -Version $version
+      - name: Publish GitHub Release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart("v")
+          $arguments = @(
+            "release", "create", $env:GITHUB_REF_NAME,
+            ".\dist\codex-synckit-$version.zip",
+            ".\dist\codex-synckit-$version.zip.sha256",
+            "--verify-tag",
+            "--generate-notes",
+            "--title", "Codex SyncKit $version"
+          )
+          if ($version.Contains("-")) {
+            $arguments += "--prerelease"
+          }
+          & gh @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitHub Release creation failed with exit code $LASTEXITCODE."
+          }

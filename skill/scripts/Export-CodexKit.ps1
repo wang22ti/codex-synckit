@@ -3158,6 +3158,8 @@ The `source` field must be `codex`, not `codexkit-self-test`.
 function Write-ManifestAndLogs {
     Write-Info "Writing manifest and logs"
     $manifest = [pscustomobject]@{
+        product = "codex-synckit"
+        manifest_version = 1
         generated_at = (Get-Date).ToString("o")
         machine = $env:COMPUTERNAME
         user = $env:USERNAME

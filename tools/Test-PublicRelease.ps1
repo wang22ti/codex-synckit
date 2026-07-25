@@ -17,6 +17,12 @@ function Test-IsGitMetadata([string]$Path) {
 
 $required = @(
     ".github\workflows\test.yml",
+    ".github\workflows\release.yml",
+    ".github\ISSUE_TEMPLATE\bug_report.yml",
+    ".github\ISSUE_TEMPLATE\feature_request.yml",
+    ".github\ISSUE_TEMPLATE\config.yml",
+    ".github\PULL_REQUEST_TEMPLATE.md",
+    ".gitattributes",
     ".gitignore",
     "CHANGELOG.md",
     "CODE_OF_CONDUCT.md",
@@ -32,7 +38,10 @@ $required = @(
     "docs\UNINSTALL.md",
     "skill\SKILL.md",
     "skill\scripts\Export-CodexKit.ps1",
-    "subsystems\memory-and-improvement\SKILL.md"
+    "skill\scripts\tests\Install-CodexSyncKit.test.ps1",
+    "subsystems\memory-and-improvement\SKILL.md",
+    "tools\Test-MarkdownLinks.ps1",
+    "tools\Test-MemorySubsystem.sh"
 )
 foreach ($relative in $required) {
     if (-not (Test-Path -LiteralPath (Join-Path $Root $relative))) {
@@ -41,7 +50,7 @@ foreach ($relative in $required) {
 }
 
 $allowedTopLevel = @(
-    ".git", ".github", ".gitignore", "CHANGELOG.md", "CODE_OF_CONDUCT.md",
+    ".git", ".github", ".gitattributes", ".gitignore", "CHANGELOG.md", "CODE_OF_CONDUCT.md",
     "CONTRIBUTING.md", "dist", "docs", "Install-CodexSyncKit.cmd",
     "Install-CodexSyncKit.ps1", "LICENSE",
     "README.md", "README.zh-CN.md", "SECURITY.md", "skill", "subsystems",
@@ -76,7 +85,10 @@ foreach ($pattern in $forbiddenFilePatterns) {
     if ($match) { throw "Forbidden public-release file: $($match.FullName)" }
 }
 
-$textExtensions = @(".ps1", ".mjs", ".js", ".json", ".yaml", ".yml", ".md", ".txt", ".csv", ".toml", ".cmd", ".vbs")
+$textExtensions = @(
+    ".ps1", ".mjs", ".js", ".json", ".yaml", ".yml", ".md", ".txt",
+    ".csv", ".toml", ".cmd", ".vbs", ".sh", ".awk"
+)
 $profilePattern = [regex]::Escape("C:" + "\Users\") + '[^\\\s"''<>]+'
 $mntProfilePattern = [regex]::Escape("/mnt/c/" + "Users/") + '[^/\s"''<>]+'
 $homeProfilePattern = '(?<![A-Za-z0-9_])/' + 'Users/' + '[^/\s"''<>]+'
@@ -115,5 +127,26 @@ foreach ($script in @(Get-ChildItem -LiteralPath $Root -File -Recurse -Force -Fi
         throw "PowerShell parse failed for $($script.FullName): $($errors[0].Message)"
     }
 }
+
+foreach ($shellFile in @(Get-ChildItem -LiteralPath $Root -File -Recurse -Force |
+        Where-Object { $_.Extension.ToLowerInvariant() -in @(".sh", ".awk") })) {
+    if (Test-IsGitMetadata $shellFile.FullName) { continue }
+    if ($shellFile.FullName -match '\\dist\\') { continue }
+    if ([IO.File]::ReadAllBytes($shellFile.FullName) -contains 13) {
+        throw "Shell-compatible file must use LF line endings: $($shellFile.FullName)"
+    }
+}
+
+if (Test-Path -LiteralPath (Join-Path $Root ".git")) {
+    $trackedDist = @(& git -C $Root ls-files -- dist 2>$null)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not verify whether dist artifacts are tracked."
+    }
+    if ($trackedDist.Count -gt 0) {
+        throw "Generated dist artifacts must not be tracked: $($trackedDist -join ', ')"
+    }
+}
+
+& (Join-Path $Root "tools\Test-MarkdownLinks.ps1") -Root $Root
 
 Write-Host "[OK] public release gate passed: $Root" -ForegroundColor Green
