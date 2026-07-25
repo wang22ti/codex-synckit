@@ -2,130 +2,159 @@
 
 [简体中文](README.zh-CN.md) | English
 
-**Carry the same Codex working environment between Windows PCs through
-OneDrive—without Git, manual junctions, or copying hidden folders by hand.**
+![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows11&logoColor=white)
+![OneDrive](https://img.shields.io/badge/Sync-OneDrive-0078D4?logo=microsoftonedrive&logoColor=white)
+![PowerShell 5.1+](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE?logo=powershell&logoColor=white)
+![Release Alpha](https://img.shields.io/badge/Release-Alpha-F59E0B)
+![MIT License](https://img.shields.io/badge/License-MIT-22C55E)
 
-Codex SyncKit exports the parts of Codex that are useful across machines into a
-private OneDrive folder, safely connects each PC to that shared source, and
-installs a managed `ChatGPT` shortcut. After the one-time setup, normal use is
-simply opening ChatGPT from that shortcut. There are no daily PowerShell
-commands to remember.
+**Install once, launch with one click, and carry a complete Codex working
+environment to every Windows PC.**
 
-## Why use it
+Codex SyncKit connects PCs through OneDrive without manual junctions or copying
+hidden folders by hand, providing a continuous Codex experience across
+machines:
 
-- **Built for Codex:** it understands skills, hooks, guidance, memory, projects,
-  automations, conversations, and desktop sidebar state.
-- **No Git for end users:** install from a ZIP with one PowerShell command.
-- **Safe by default:** existing data is backed up, important copies are checked
-  with SHA-256, conflicts stop before mutation, and desktop synchronization
-  fails closed.
-- **Private state stays private:** credentials, command approvals, caches, logs,
-  local preferences, and the Codex SQLite database are deliberately excluded.
-- **One consistent launch path:** the managed shortcut coordinates the state
-  that must be pulled before ChatGPT opens and pushed after it closes.
+- **🚀 One-click launch:** After setup, simply open the managed `ChatGPT`
+  Start-menu shortcut. It prepares synchronization before launch and performs
+  cleanup after ChatGPT closes.
+- **🔄 Comprehensive continuity:** Conversations, sidebar and project
+  organization, skills, hooks, global guidance, long-term memory, and
+  environment inventories can stay continuous. Project workspaces and
+  automations can be added when needed.
+- **🧰 Your capabilities travel too:** Reusable Codex skills are synchronized,
+  including skills for creating flowcharts, architecture diagrams, and other
+  illustrations, so a new PC does not require rebuilding the whole workflow.
+
+## Installation and use
+
+Requirements: Windows 10 or 11, Windows PowerShell 5.1 or newer, OneDrive,
+Codex/ChatGPT desktop or Codex CLI, and Node.js for the desktop-state helpers.
+The optional memory subsystem's Bash maintenance tools require Git for Windows
+or another compatible Bash runtime.
+
+1. Download and extract the latest release ZIP.
+2. Double-click `Install-CodexSyncKit.cmd` to start setup.
+
+The installer then asks whether to add the long-term memory subsystem. There is
+no default answer: enter `Y` or `N`. For unattended installation, make the same
+choice explicitly with `-InstallMemorySubsystem` or `-SkipMemorySubsystem`.
+Choosing not to add it does not delete a previously installed copy or existing
+private memory.
+
+The installer adds the bundled `codexkit-sync` skill, exports the private
+OneDrive package, applies the recommended links, and creates the managed
+`ChatGPT` shortcut. Conversation and desktop-state synchronization are enabled
+by default; use `-ExcludeSessions` or `-ExcludeDesktopState` only when those
+categories should remain local.
+
+Setup is performed once. Afterward, click the managed `ChatGPT` Start-menu
+shortcut for one-click launch; synchronization preparation and shutdown cleanup
+run automatically.
 
 ## How it works
 
-1. The bootstrap installer creates a private `CodexKit` directory in OneDrive
-   containing the selected shared Codex data.
-2. It connects each Windows PC to that directory with verified links, hooks,
-   and a managed Start-menu shortcut.
-3. OneDrive transports file changes between PCs. Codex SyncKit supplies the
-   Codex-specific layout, installation, validation, backup, and conflict
-   safeguards that ordinary folder synchronization does not provide.
-
-## What can be synchronized
-
-| Category | Default | What it provides |
-| --- | --- | --- |
-| Skills, hooks, and global guidance | On | The same Codex capabilities and instructions on every PC |
-| Global memory | On with recommended setup | Shared long-term context without copying device-local maintenance state |
-| Environment and plugin inventories | On | A comparison snapshot of each PC; plugins are reported, not copied |
-| Codex projects | Optional | The same project workspace under the normal Windows Documents location |
-| Codex automations | Optional | Shared automation definitions; only one designated machine should run a given schedule |
-| Conversation history | On | Lets another PC reopen and continue the same Codex tasks; it may contain complete prompts and responses |
-| Sidebar and project organization | On | Carries task titles, pins, project grouping, ordering, and workspace hints between PCs |
-| Credentials, approvals, caches, logs, local preferences, `state_5.sqlite` | Never | These remain device-local for security and stability |
-
-Conversation history and sidebar organization are privacy-sensitive because
-they can contain conversation text, project names, and local paths. They are
-enabled by default because carrying active Codex tasks and their organization
-between PCs is a core purpose of Codex SyncKit. Keep the generated `CodexKit`
-folder private and see [Privacy](docs/PRIVACY.md) for the data boundary.
-
-## Comparison with continuity features in other agents
-
-| Solution | Conversation or task continuity | Rules and memory | Cross-device scope |
-| --- | --- | --- | --- |
-| **Codex SyncKit** | Synchronizes complete conversations, task titles, pins, groups, and ordering | Synchronizes skills, hooks, global guidance, and long-term memory | Treats Codex conversations, organization, capabilities, and installation state as one portable environment |
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code/cli-usage) | Continues the latest conversation or resumes one by session ID | [`CLAUDE.md`](https://docs.anthropic.com/en/docs/claude-code/memory) stores project- and user-level guidance | Official features focus on session resume and file-based memory; sharing across PCs still requires moving the relevant files and state |
-| [Cursor](https://docs.cursor.com/en/context/memories) | Memories preserve project context across conversations | Automatically generated, project-scoped Memories | Focuses on agent memory and rules rather than complete conversation, sidebar, plugin, and environment migration |
-| [Windsurf Cascade](https://docs.windsurf.com/windsurf/cascade/memories) | Memories preserve context across conversations | Automatic Memories stay on the current device; shared rules can live in `.windsurf/rules/` or `AGENTS.md` | Automatic Memories do not cross devices; durable sharing primarily uses project files |
-| [Cline](https://docs.cline.bot/core-workflows/task-management) | Saves complete task history and can resume conversations, code changes, commands, and decisions | Context is retained in task history | Task history is stored locally; cross-device use needs a separate storage or synchronization strategy |
-
-Most of these products address session recovery, memory, or reusable rules
-inside one agent. Codex SyncKit instead treats Codex conversations,
-organization, skills, hooks, memory, and installation state as one portable
-environment.
-
-## Requirements
-
-- Windows 10 or Windows 11
-- Windows PowerShell 5.1 or newer
-- OneDrive
-- Codex/ChatGPT desktop or Codex CLI
-- Node.js for desktop-state and task-catalog helpers
-
-Git is not required for installation or normal use.
-
-## Install from a release ZIP
-
-1. Download the latest release ZIP and its `.sha256` file.
-2. Verify the checksum and extract the ZIP.
-3. Open PowerShell in the extracted directory.
-4. Run:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-CodexSyncKit.ps1 -Recommended
+```mermaid
+flowchart LR
+    L["🚀 Managed shortcut<br/>One-click launch"] --> A["💻 Current PC<br/>Prepare before launch · Clean up after exit"]
+    A <-->|"OneDrive transport"| K[("☁️ CodexKit<br/>Private OneDrive directory")]
+    K <-->|"OneDrive transport"| B["💻 Another PC<br/>Continue conversations and workspace"]
+    K --- D["🧩 Conversations · Sidebar · Skills · Memory<br/>Optional projects and automations"]
 ```
 
-This installs the bundled skill under its compatibility ID,
-`codexkit-sync`, exports the private OneDrive package, applies the recommended
-links, and creates the managed `ChatGPT` shortcut. Conversation and desktop
-state synchronization are enabled by default. Add `-ExcludeSessions` or
-`-ExcludeDesktopState` only if you deliberately do not want those categories
-in the private package.
+1. The installer creates a private `CodexKit` directory in OneDrive containing
+   the selected shared Codex data.
+2. It connects each Windows PC to that directory with verified links, hooks,
+   and a managed Start-menu shortcut.
+3. During installation, it requires an explicit Yes or No choice for the
+   optional long-term memory subsystem; pressing Enter alone selects nothing.
+4. OneDrive transports file changes. Codex SyncKit supplies the Codex-specific
+   layout, validation, backup, conflict protection, and startup/shutdown
+   coordination.
 
-## Normal use and synchronization precautions
+Existing data is backed up before replacement, and unsupported or conflicting
+state fails closed.
 
-There is no daily command workflow. Open ChatGPT from the managed Start-menu
-shortcut.
+## What it synchronizes
+
+Codex SyncKit is designed around Codex's data layout rather than treating the
+whole application directory as an ordinary folder. It synchronizes portable
+state, keeps device-local state out of the shared package, and stops before
+mutation when it detects an unsafe conflict.
+
+In the paths below, `%USERPROFILE%` is the current Windows user folder and
+`CodexKit\...` is inside the private OneDrive package.
+
+| Category | Default | Local source → shared location | What this means |
+| --- | --- | --- | --- |
+| Skills | On | `.codex\skills` → `CodexKit\skills` | Reusable instructions and tools that teach Codex how to perform specialized tasks |
+| Hooks | On | `.codex\hooks.json` and its scripts → `CodexKit\hooks` | Commands triggered at events such as session start or prompt submission; hook trust remains local to each PC |
+| Global instructions | On | `.codex\AGENTS.md` → `CodexKit\rules\global` | Instructions Codex should follow across all projects; these are not command-approval rules |
+| Long-term memory subsystem[^memory] | Asked during installation | Subsystem code is installed as a Codex skill; private memory uses project `.learnings` folders and `%USERPROFILE%\global-memory` | Captures, recalls, organizes, and maintains facts and lessons across conversations and projects |
+| Conversation history | On | `.codex\sessions`, `.codex\archived_sessions`, `.codex\session_index.jsonl` → `CodexKit\session-data` | Complete active and archived conversations plus their title index, so another PC can reopen them |
+| Sidebar and project organization[^sidebar-workspace] | On | Portable fields from `.codex\.codex-global-state.json` → `CodexKit\desktop-state` | Task titles, project groups, task-to-project assignments, descriptions, pins, and ordering; **not the actual project files** |
+| Project workspace files | Optional | `Documents\Codex` → `CodexKit\CodexProjects` | The real folders and files on disk, including source code, documents, `.git`, `.agents`, and project-level `.codex` settings |
+| Codex automations | Optional | `.codex\automations` → `CodexKit\automations` | Automation definitions such as `automation.toml` and their `memory.md`; only one designated PC should execute a shared schedule |
+| Device environment inventory | On | Current PC scan → `CodexKit\environment\devices\<computer>.json` | A report of installed tools and versions for comparing PCs; it does not install or copy applications |
+| Plugin inventory | On | Names and versions found under `.codex\plugins\cache` → `CodexKit\plugins\inventory.json` | A list used to report missing plugins on another PC; plugin programs and caches are not copied |
+| Sanitized configuration snapshot | Recorded, not applied | `.codex\config.toml` and `*.config.toml` → `CodexKit\profiles` | A reference copy with likely secrets redacted; model choice, reasoning level, features, trust, and other live preferences remain selected locally |
+| Credentials and device-only runtime state[^privacy] | Never | Not copied to OneDrive | `auth.json`, `.codex\rules`, `state_5.sqlite`, Codex logs, caches, sandbox data, trust hashes, SSH keys, `.env` files, and likely secret/token files remain local |
+
+[^memory]:
+    - Long-term memory is managed by the bundled [`memory-and-improvement`](subsystems/memory-and-improvement/README.md) subsystem; it is not merely a copied folder.
+    - Project memory is stored in `.learnings`; cross-project memory is stored in `global-memory`.
+    - A project's `.learnings` crosses devices only when the project is in OneDrive or project-workspace synchronization is enabled.
+[^sidebar-workspace]:
+    - “Sidebar and project organization” synchronizes how projects and tasks appear and are organized in ChatGPT.
+    - “Project workspace files” synchronizes the real folders and files stored on disk.
+    - A project may appear in another PC's sidebar even when workspace-file synchronization is not enabled.
+
+[^privacy]:
+    - Conversation history, memory, sidebar organization, environment reports, and configuration snapshots may contain prompts, responses, learned facts, project names, software details, and local paths.
+    - Keep the generated `CodexKit` directory private and see [Privacy](docs/PRIVACY.md) for the data boundary.
+
+## Compared with synchronization tools
+
+The comparison below covers tools that synchronize agent configuration,
+context, or working state. It does not compare the agents themselves.
+
+| Tool | Primary synchronization target | Cross-device transport | Scope boundary |
+| --- | --- | --- | --- |
+| **Codex SyncKit** | Codex conversations, sidebar organization, skills, hooks, global guidance, memory, projects, automations, and environment inventory | Private OneDrive directory | Designed for complete Codex continuity on Windows while separating shared and device-local state |
+| [coding-agent-sync](https://marketplace.visualstudio.com/items?itemName=TCTinh.coding-agent-sync) | Claude Code and OpenCode settings, MCP, commands, agents, skills, and context bundles | Encrypted private GitHub Gist with explicit `push` / `pull` | OpenCode supports portable context export/import; Codex support is still listed as coming soon |
+| [agentsync](https://agentsync.cc/) | Translates canonical MCP, memory, skills, subagents, commands, hooks, and plugin components into native formats for multiple coding agents | Its canonical directory can be carried through dotfiles or Git and applied on each machine | Focuses on cross-agent configuration translation and drift handling, not conversation history or desktop sidebar state |
+| [skillshare](https://github.com/runkids/skillshare) | Skills, agents, rules, commands, and other file-based resources for many AI CLIs | A Git remote can carry the canonical resource repository between machines | Broad agent coverage and security auditing, but no conversation, desktop-state, or application-runtime synchronization |
+| [agent-rules-sync](https://github.com/dhruv-anand-aintech/agent-rules-sync) | Rules and skills across Claude, Cursor, Gemini, OpenCode, Codex, and others, plus Claude settings and hooks | A local daemon synchronizes agent directories and selected repositories; a repository or another transport is still needed between PCs | Keeps multiple agents' rules aligned; it is not a conversation-continuity tool |
+| [Roo Code settings management](https://roocodeinc.github.io/Roo-Code/features/settings-management/) | Roo Code provider profiles, global settings, custom modes, and optionally task history and the storage directory | Automatic import from a shared settings file or a cloud-synced custom storage directory | Roo Code only; exported settings may contain API keys in plaintext |
+| [gstack brain sync](https://github.com/garrytan/gstack/blob/main/USING_GBRAIN_WITH_GSTACK.md) | gstack learnings, plans, designs, retrospectives, and developer profile | Private Git repository | Focuses on cross-machine memory and work artifacts, not complete agent configuration, conversations, or UI state |
+
+These tools solve different problems: some distribute configuration between
+agents, some carry only skills or memory, and some restore context across
+machines. Codex SyncKit focuses on cross-machine continuity for one Codex
+desktop and CLI environment.
+
+## Limitations
 
 - Before moving to another PC, close ChatGPT and wait until OneDrive reports
   that the `CodexKit` folder is up to date.
 - Do not use the same synchronized conversation on two PCs at the same time.
-- If conversation or sidebar synchronization is enabled, use only one managed
-  ChatGPT instance at a time and let its closing synchronization finish.
-- Never publish or share the generated private `CodexKit` directory. It may
-  contain memory, project metadata, environment details, and—when enabled—full
-  conversation history.
-- Do not manually copy or link credentials, command-approval rules,
-  `state_5.sqlite`, caches, or logs between machines.
-- OneDrive conflict copies and a stale running-device warning should be treated
-  as a signal to stop and verify which PC has the newest state.
+- Run only one managed ChatGPT instance at a time and let its closing
+  synchronization finish.
+- Never publish or share the generated private `CodexKit` directory.
+- Do not manually copy or link credentials, command approvals,
+  `state_5.sqlite`, caches, or logs.
+- Treat OneDrive conflict copies or a stale running-device warning as a signal
+  to stop and verify which PC has the newest state.
+
+The alpha release is focused on Windows and OneDrive. Codex internal storage
+may change between desktop releases; unsupported layouts stop with a diagnostic
+instead of being modified speculatively.
 
 For privacy boundaries, recovery, and removal, see
 [Privacy](docs/PRIVACY.md), [Security](SECURITY.md), and
-[Uninstall](docs/UNINSTALL.md).
-
-## Current scope
-
-The alpha release is intentionally focused on Windows and OneDrive. Codex
-internal storage may change between desktop releases; unsupported layouts must
-stop with a diagnostic rather than being modified speculatively.
-
-Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). The project
-is available under the [MIT License](LICENSE).
+[Uninstall](docs/UNINSTALL.md). Contributions are welcome; see
+[CONTRIBUTING.md](CONTRIBUTING.md). The project is available under the
+[MIT License](LICENSE).
 
 Codex SyncKit is an independent community project. It is not affiliated with,
 sponsored by, or endorsed by OpenAI. OpenAI, ChatGPT, and Codex are trademarks

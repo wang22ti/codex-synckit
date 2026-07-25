@@ -21,6 +21,7 @@ $required = @(
     "CHANGELOG.md",
     "CODE_OF_CONDUCT.md",
     "CONTRIBUTING.md",
+    "Install-CodexSyncKit.cmd",
     "Install-CodexSyncKit.ps1",
     "LICENSE",
     "README.md",
@@ -30,7 +31,8 @@ $required = @(
     "docs\PRIVACY.md",
     "docs\UNINSTALL.md",
     "skill\SKILL.md",
-    "skill\scripts\Export-CodexKit.ps1"
+    "skill\scripts\Export-CodexKit.ps1",
+    "subsystems\memory-and-improvement\SKILL.md"
 )
 foreach ($relative in $required) {
     if (-not (Test-Path -LiteralPath (Join-Path $Root $relative))) {
@@ -40,8 +42,10 @@ foreach ($relative in $required) {
 
 $allowedTopLevel = @(
     ".git", ".github", ".gitignore", "CHANGELOG.md", "CODE_OF_CONDUCT.md",
-    "CONTRIBUTING.md", "dist", "docs", "Install-CodexSyncKit.ps1", "LICENSE",
-    "README.md", "README.zh-CN.md", "SECURITY.md", "skill", "THIRD_PARTY_NOTICES.md", "tools"
+    "CONTRIBUTING.md", "dist", "docs", "Install-CodexSyncKit.cmd",
+    "Install-CodexSyncKit.ps1", "LICENSE",
+    "README.md", "README.zh-CN.md", "SECURITY.md", "skill", "subsystems",
+    "THIRD_PARTY_NOTICES.md", "tools"
 )
 foreach ($entry in @(Get-ChildItem -LiteralPath $Root -Force)) {
     if ($allowedTopLevel -notcontains $entry.Name) {

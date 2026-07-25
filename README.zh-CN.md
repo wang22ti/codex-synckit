@@ -2,118 +2,139 @@
 
 简体中文 | [English](README.md)
 
-**通过 OneDrive，把同一套 Codex 工作环境带到多台 Windows 电脑；不需要
-Git，不需要手工创建目录链接，也不需要自己搬运隐藏文件夹。**
+![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows11&logoColor=white)
+![OneDrive](https://img.shields.io/badge/同步-OneDrive-0078D4?logo=microsoftonedrive&logoColor=white)
+![PowerShell 5.1+](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE?logo=powershell&logoColor=white)
+![Release Alpha](https://img.shields.io/badge/版本-Alpha-F59E0B)
+![MIT License](https://img.shields.io/badge/许可-MIT-22C55E)
 
-Codex SyncKit 会把适合跨电脑共享的 Codex 数据导出到 OneDrive 中的私有目录，
-安全地连接每台电脑，并安装一个托管的 `ChatGPT` 开始菜单快捷方式。完成一次性
-安装后，日常使用只需从这个快捷方式打开 ChatGPT，不需要记忆或执行日常
-PowerShell 命令。
+**一次安装，一键启动，把完整的 Codex 工作环境带到每一台 Windows 电脑。**
 
-## 为什么使用它
+Codex SyncKit 通过 OneDrive 连接多台电脑，不需要手工创建目录链接，也不用自己
+搬运隐藏文件夹，并让跨电脑使用 Codex 保持连贯：
 
-- **专门理解 Codex：** 能识别技能、Hooks、全局指导、记忆、项目、自动化、
-  会话以及桌面侧边栏状态。
-- **普通用户不需要 Git：** 下载 ZIP 后运行一条 PowerShell 安装命令即可。
-- **默认注重安全：** 替换前备份原数据，重要复制使用 SHA-256 校验，遇到冲突
-  先停止，桌面状态同步失败时不会继续启动。
-- **私密的设备状态留在本机：** 凭据、命令审批、缓存、日志、本地偏好和 Codex
-  SQLite 数据库不会被同步。
-- **统一的启动方式：** 托管快捷方式会协调 ChatGPT 启动前需要拉取、关闭后需要
-  推送的状态。
+- **🚀 一键启动：** 安装一次后，只需点击开始菜单中的 `ChatGPT` 快捷方式；启动前
+  自动准备同步状态，关闭后自动整理。
+- **🔄 同步全面：** 会话历史、侧栏与项目分组、技能、Hooks、全局指令、长期记忆和
+  环境清单都能保持连续，项目工作区与自动化也可按需加入。
+- **🧰 能力也能带走：** Codex 的可复用技能会一起同步，包括用于绘制流程图、架构图、
+  示意图等内容的技能；换一台电脑后，不必重新搭建整套工作方法。
 
-## 它是怎样工作的
+## 安装与使用
 
-1. 引导安装器在 OneDrive 中创建一个私有 `CodexKit` 目录，保存选定的共享
-   Codex 数据。
-2. 安装器通过经过验证的目录链接、Hooks 和托管快捷方式，把每台 Windows 电脑
-   连接到这套共享数据。
-3. OneDrive 负责在电脑之间传输文件；Codex SyncKit 负责 Codex 专用的目录结构、
-   安装、校验、备份和冲突保护。
+系统要求：Windows 10 或 11、Windows PowerShell 5.1 或更高版本、OneDrive、
+Codex/ChatGPT 桌面应用或 Codex CLI，以及用于桌面状态辅助工具的 Node.js。
+可选长期记忆子系统中的 Bash 维护工具需要 Git for Windows 或其他兼容的 Bash
+运行环境。
 
-## 可以同步什么
+1. 下载并解压最新的 Release ZIP。
+2. 双击 `Install-CodexSyncKit.cmd` 启动安装。
 
-| 类别 | 默认状态 | 作用 |
-| --- | --- | --- |
-| 技能、Hooks 和全局指导 | 开启 | 让每台电脑拥有相同的 Codex 能力与指令 |
-| 全局记忆 | 推荐安装时开启 | 共享长期上下文，但不复制各电脑自己的维护状态 |
-| 环境与插件清单 | 开启 | 记录各电脑的差异；只报告插件，不复制插件缓存 |
-| Codex 项目 | 可选 | 让多台电脑通过正常的 Windows 文档目录访问同一项目工作区 |
-| Codex 自动化 | 可选 | 共享自动化定义；同一个计划任务只应由一台指定电脑运行 |
-| 会话历史 | 开启 | 让另一台电脑重新打开并继续同一个 Codex 任务；其中可能包含完整提示词和回答 |
-| 侧边栏与项目组织 | 开启 | 同步任务标题、置顶、项目分组、排序和工作区提示 |
-| 凭据、审批规则、缓存、日志、本地偏好、`state_5.sqlite` | 永不同步 | 为了安全和稳定，这些内容始终保留在本机 |
+安装器随后会询问是否加入长期记忆子系统，而且没有默认答案：必须输入 `Y` 或
+`N`。无人值守安装则必须显式使用 `-InstallMemorySubsystem` 或
+`-SkipMemorySubsystem`。选择不加入不会删除以前已经安装的副本或已有私人记忆。
 
-“会话历史”和“侧边栏与项目组织”属于私密数据，因为其中可能包含对话正文、
-项目名称和本地路径。但跨电脑继续原来的 Codex 任务、保留相同的任务组织，正是
-Codex SyncKit 的核心用途，因此它们默认开启。请保持生成的 `CodexKit` 目录为
-私有目录，并阅读[隐私说明](docs/PRIVACY.md)了解数据边界。
+安装器会添加随包附带的 `codexkit-sync` 技能，导出 OneDrive 私有包，应用推荐
+链接，并创建托管的 `ChatGPT` 快捷方式。会话和桌面状态同步默认开启；只有在
+相应内容需要保留在本机时，才使用 `-ExcludeSessions` 或
+`-ExcludeDesktopState`。
 
-## 与其他 Agent 的状态延续方式对比
+安装只需执行一次。以后从开始菜单点击托管的 `ChatGPT` 快捷方式即可一键启动，
+同步准备和关闭后的整理会自动完成。
 
-| 方案 | 对话或任务延续 | 规则与记忆 | 跨设备范围 |
-| --- | --- | --- | --- |
-| **Codex SyncKit** | 同步完整会话、任务标题、置顶、分组和排序 | 同步技能、Hooks、全局指导和长期记忆 | 将 Codex 会话、组织状态、能力配置和安装状态作为一套可迁移环境统一处理 |
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code/cli-usage) | 可继续最近的会话或按会话 ID 恢复 | 通过 [`CLAUDE.md`](https://docs.anthropic.com/zh-CN/docs/claude-code/memory) 保存项目和用户级指导 | 官方功能侧重会话恢复与文件化记忆；跨电脑共享仍需另行传输相关文件和状态 |
-| [Cursor](https://docs.cursor.com/en/context/memories) | Memories 可在同一项目的不同会话间保留上下文 | 自动生成并按项目管理 Memories | 侧重 Agent 记忆与规则，不是完整的会话、侧边栏、插件和环境迁移方案 |
-| [Windsurf Cascade](https://docs.windsurf.com/zh/windsurf/cascade/memories) | Memories 可跨对话保留上下文 | 自动 Memories 保存在当前设备；共享规则可写入 `.windsurf/rules/` 或 `AGENTS.md` | 自动 Memories 不跨设备，持久共享主要依赖项目文件 |
-| [Cline](https://docs.cline.bot/core-workflows/task-management) | 保存完整任务历史，可恢复对话、代码改动、命令和决策 | 上下文保存在任务历史中 | 任务历史保存在本机，跨设备使用需要额外的存储或同步方案 |
+## 工作原理
 
-这些产品大多解决单一 Agent 内的会话恢复、记忆或规则复用；Codex SyncKit 的重点
-是把 Codex 的会话、组织状态、技能、Hooks、记忆和安装状态作为一套可迁移环境
-统一处理。
-
-## 系统要求
-
-- Windows 10 或 Windows 11
-- Windows PowerShell 5.1 或更高版本
-- OneDrive
-- Codex/ChatGPT 桌面应用或 Codex CLI
-- Node.js，用于桌面状态和任务目录辅助工具
-
-安装和日常使用不需要 Git。
-
-## 从 Release ZIP 安装
-
-1. 下载最新 Release ZIP 及其 `.sha256` 文件。
-2. 校验 SHA-256 并解压 ZIP。
-3. 在解压目录中打开 PowerShell。
-4. 运行：
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-CodexSyncKit.ps1 -Recommended
+```mermaid
+flowchart LR
+    L["🚀 托管快捷方式<br/>一键启动"] --> A["💻 当前电脑<br/>启动前准备 · 关闭后整理"]
+    A <-->|"OneDrive 传输"| K[("☁️ CodexKit<br/>OneDrive 私有目录")]
+    K <-->|"OneDrive 传输"| B["💻 另一台电脑<br/>继续会话与工作环境"]
+    K --- D["🧩 会话 · 侧栏 · 技能 · 记忆<br/>可选项目与自动化"]
 ```
 
-该命令会以兼容 ID `codexkit-sync` 安装随包附带的技能，导出 OneDrive 私有包，
-应用推荐链接，并创建托管的 `ChatGPT` 快捷方式。会话和桌面状态同步默认开启。
-只有在明确不想同步相应内容时，才需要添加
-`-ExcludeSessions` 或 `-ExcludeDesktopState`。
+1. 安装器在 OneDrive 中创建一个私有 `CodexKit` 目录，保存选定的共享 Codex
+   数据。
+2. 安装器通过经过验证的目录链接、Hooks 和托管快捷方式，把每台 Windows 电脑
+   连接到这套共享数据。
+3. 安装过程中必须明确选择是否加入长期记忆子系统；直接按回车不会选择任何
+   选项。
+4. OneDrive 负责传输文件；Codex SyncKit 负责 Codex 专用的目录结构、校验、
+   备份、冲突保护，以及启动和关闭时的同步协调。
 
-## 日常使用与同步注意事项
+替换前会备份现有数据；遇到不支持的状态或冲突时，工具会安全停止。
 
-日常不需要运行命令，只需从开始菜单中的托管 `ChatGPT` 快捷方式启动。
+## 同步什么
+
+Codex SyncKit 根据 Codex 的数据结构工作，而不是把整个应用目录当作普通文件夹
+同步。它只共享适合跨设备使用的状态，把本机状态留在本机，并在检测到不安全的
+冲突时停止操作。
+
+下表中的 `%USERPROFILE%` 表示当前 Windows 用户目录，`CodexKit\...` 表示
+OneDrive 私有同步包中的位置。
+
+| 类别 | 默认状态 | 本机来源 → OneDrive 位置 | 通俗解释 |
+| --- | --- | --- | --- |
+| 技能 | 开启 | `.codex\skills` → `CodexKit\skills` | 可重复使用的指令和工具，用来教 Codex 完成特定类型的任务 |
+| Hooks | 开启 | `.codex\hooks.json` 及其脚本 → `CodexKit\hooks` | 在会话开始、提交提示词等事件发生时自动运行的命令；每台电脑仍需单独确认信任 |
+| 全局指令 | 开启 | `.codex\AGENTS.md` → `CodexKit\rules\global` | 要求 Codex 在所有项目中都遵守的说明；它们不是命令审批规则 |
+| 长期记忆子系统[^memory] | 安装时询问 | 子系统代码安装为 Codex 技能；私人记忆保存在项目 `.learnings` 和 `%USERPROFILE%\global-memory` | 负责记录、读取、整理和维护跨会话、跨项目的事实与经验 |
+| 会话历史 | 开启 | `.codex\sessions`、`.codex\archived_sessions`、`.codex\session_index.jsonl` → `CodexKit\session-data` | 完整的当前及归档对话和标题索引，让另一台电脑能够重新打开并继续 |
+| 侧栏和项目分组[^sidebar-workspace] | 开启 | `.codex\.codex-global-state.json` 中可跨设备使用的字段 → `CodexKit\desktop-state` | 任务标题、项目分组、任务属于哪个项目、描述、置顶和排序；**不包含项目的实际文件** |
+| 项目工作区文件 | 可选 | `Documents\Codex` → `CodexKit\CodexProjects` | 硬盘上的真实文件夹和文件，包括源代码、文档、`.git`、`.agents` 和项目级 `.codex` 设置 |
+| Codex 自动化 | 可选 | `.codex\automations` → `CodexKit\automations` | `automation.toml` 等自动化定义及其 `memory.md`；同一个共享计划只应由一台指定电脑执行 |
+| 设备环境清单 | 开启 | 扫描当前电脑 → `CodexKit\environment\devices\<电脑名>.json` | 记录已安装工具及版本，用于比较电脑差异；不会安装或复制应用程序 |
+| 插件清单 | 开启 | 读取 `.codex\plugins\cache` 中的名称和版本 → `CodexKit\plugins\inventory.json` | 用于提示另一台电脑缺少哪些插件；不会复制插件程序和缓存 |
+| 脱敏配置快照 | 只记录，不自动应用 | `.codex\config.toml`、`*.config.toml` → `CodexKit\profiles` | 删除疑似密钥后的参考副本；模型、推理等级、功能开关、信任设置等实际偏好仍由每台电脑自行选择 |
+| 凭据和仅限本机的运行状态[^privacy] | 永不同步 | 不复制到 OneDrive | `auth.json`、`.codex\rules`、`state_5.sqlite`、Codex 日志、缓存、沙箱数据、信任记录、SSH 密钥、`.env` 和疑似密钥或令牌文件都留在本机 |
+
+[^memory]:
+    - 长期记忆由随项目提供的 [`memory-and-improvement`](subsystems/memory-and-improvement/README.zh-CN.md) 子系统管理，不是简单复制一个文件夹。
+    - 项目记忆保存在 `.learnings`；跨项目记忆保存在 `global-memory`。
+    - 项目 `.learnings` 只有在项目位于 OneDrive，或开启项目工作区同步时，才会跨电脑传输。
+[^sidebar-workspace]:
+    - “侧栏和项目分组”同步项目和任务在 ChatGPT 中的显示与组织。
+    - “项目工作区文件”同步硬盘上的真实文件夹和文件。
+    - 即使未开启项目工作区文件同步，项目仍可能出现在另一台电脑的侧栏中。
+
+[^privacy]:
+    - 会话历史、记忆、侧栏组织、环境报告和配置快照可能包含提示词、回答、长期事实、项目名称、软件信息和本地路径。
+    - 请保持生成的 `CodexKit` 目录为私有目录，并阅读[隐私说明](docs/PRIVACY.md)了解数据边界。
+
+## 与同步工具对比
+
+下表比较的是同步 Agent 配置、上下文或工作状态的工具，不是在比较 Agent 本身。
+
+| 工具 | 主要同步对象 | 跨设备方式 | 范围边界 |
+| --- | --- | --- | --- |
+| **Codex SyncKit** | Codex 会话、侧栏组织、技能、Hooks、全局指令、记忆、项目、自动化和环境清单 | OneDrive 私有目录 | 面向 Windows 上的 Codex 完整工作连续性，同时区分共享状态与本机状态 |
+| [coding-agent-sync](https://marketplace.visualstudio.com/items?itemName=TCTinh.coding-agent-sync) | Claude Code 和 OpenCode 的设置、MCP、命令、Agent、技能与上下文包 | 加密的私有 GitHub Gist，通过 `push` / `pull` 传输 | OpenCode 支持导入导出便携上下文；Codex 支持仍标为“即将推出” |
+| [agentsync](https://agentsync.cc/) | 把统一定义的 MCP、记忆、技能、子 Agent、命令、Hooks 和插件组件转换到多个编码 Agent 的原生格式 | 规范目录可纳入 dotfiles 或 Git，在各电脑执行 `apply` | 强项是跨 Agent 配置翻译和漂移处理，不同步会话历史或桌面侧栏 |
+| [skillshare](https://github.com/runkids/skillshare) | 多种 AI CLI 的技能、Agent、规则、命令和其他文件型资源 | 可使用 Git remote 在电脑之间传输统一资源库 | 支持大量 Agent 和安全审计，但不处理会话、桌面状态或应用运行数据 |
+| [agent-rules-sync](https://github.com/dhruv-anand-aintech/agent-rules-sync) | Claude、Cursor、Gemini、OpenCode、Codex 等工具的规则和技能，以及 Claude 设置与 Hooks | 本机守护进程在 Agent 目录和指定项目间同步；跨电脑仍需项目仓库等传输层 | 适合保持多种 Agent 的规则一致，不是会话连续性工具 |
+| [Roo Code 设置管理](https://roocodeinc.github.io/Roo-Code/features/settings-management/) | Roo Code 的 Provider 配置、全局设置、自定义模式，以及可选的任务历史和存储目录 | 自动导入共享配置文件，或把自定义存储目录放入云盘 | 只面向 Roo Code；导出的设置文件可能包含明文 API 密钥 |
+| [gstack brain sync](https://github.com/garrytan/gstack/blob/main/USING_GBRAIN_WITH_GSTACK.md) | gstack 的学习记录、计划、设计、复盘和开发者画像 | 私有 Git 仓库 | 专注跨电脑记忆与工作产物，不同步完整 Agent 配置、会话或界面状态 |
+
+这些工具解决的问题并不完全相同：有的在多种 Agent 之间分发配置，有的只搬运
+技能或记忆，有的负责跨电脑恢复上下文。Codex SyncKit 的范围则集中在同一套
+Codex 桌面与 CLI 环境的跨电脑连续使用。
+
+## 限制
 
 - 换到另一台电脑前，先关闭 ChatGPT，并等待 OneDrive 显示 `CodexKit` 已同步
   完成。
 - 不要在两台电脑上同时操作同一个已同步会话。
-- 如果启用了会话或侧边栏同步，同一时间只运行一个托管 ChatGPT，并等待关闭后的
-  同步完成。
-- 不要公开或分享生成的私有 `CodexKit` 目录。其中可能包含记忆、项目元数据、
-  设备环境信息，以及启用后保存的完整会话历史。
+- 同一时间只运行一个托管 ChatGPT，并等待关闭后的同步完成。
+- 不要公开或分享生成的私有 `CodexKit` 目录。
 - 不要手工复制或链接凭据、命令审批规则、`state_5.sqlite`、缓存或日志。
 - 如果出现 OneDrive 冲突副本或旧的“其他设备正在运行”警告，应先停止操作，
   确认哪台电脑拥有最新状态。
 
+Alpha 版本聚焦于 Windows 和 OneDrive。Codex 的内部存储结构可能随桌面应用
+版本变化；遇到不支持的布局时，工具会给出诊断并停止，而不是进行推测性修改。
+
 隐私边界、恢复与移除方法见[隐私说明](docs/PRIVACY.md)、
-[安全政策](SECURITY.md)和[卸载说明](docs/UNINSTALL.md)。
-
-## 当前支持范围
-
-Alpha 版本有意聚焦于 Windows 和 OneDrive。Codex 的内部存储结构可能随桌面应用
-版本变化；遇到不受支持的布局时，工具应给出诊断并停止，而不是进行推测性修改。
-
-欢迎参与贡献，详见 [CONTRIBUTING.md](CONTRIBUTING.md)。本项目采用
-[MIT 许可证](LICENSE)。
+[安全政策](SECURITY.md)和[卸载说明](docs/UNINSTALL.md)。欢迎参与贡献，详见
+[CONTRIBUTING.md](CONTRIBUTING.md)。本项目采用 [MIT 许可证](LICENSE)。
 
 Codex SyncKit 是独立的社区项目，与 OpenAI 不存在隶属、赞助或官方认可关系。
 OpenAI、ChatGPT 和 Codex 是其各自所有者的商标。本项目不分发 OpenAI 标志。
