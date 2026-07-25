@@ -8,6 +8,12 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference = "Stop"
 if ([string]::IsNullOrWhiteSpace($Root)) { $Root = Split-Path -Parent $PSScriptRoot }
 $Root = [IO.Path]::GetFullPath($Root).TrimEnd('\')
+$gitMetadataRoot = Join-Path $Root ".git"
+
+function Test-IsGitMetadata([string]$Path) {
+    return $Path.Equals($gitMetadataRoot, [StringComparison]::OrdinalIgnoreCase) -or
+        $Path.StartsWith($gitMetadataRoot + "\", [StringComparison]::OrdinalIgnoreCase)
+}
 
 $required = @(
     ".github\workflows\test.yml",
@@ -32,7 +38,7 @@ foreach ($relative in $required) {
 }
 
 $allowedTopLevel = @(
-    ".github", ".gitignore", "CHANGELOG.md", "CODE_OF_CONDUCT.md",
+    ".git", ".github", ".gitignore", "CHANGELOG.md", "CODE_OF_CONDUCT.md",
     "CONTRIBUTING.md", "dist", "docs", "Install-CodexKitSync.ps1", "LICENSE",
     "README.md", "SECURITY.md", "skill", "THIRD_PARTY_NOTICES.md", "tools"
 )
@@ -47,7 +53,8 @@ $forbiddenDirectoryNames = @(
     "desktop-state", "environment", "profiles", "projects", "logs",
     ".learnings", "memory-system", "plugins", "network"
 )
-foreach ($directory in @(Get-ChildItem -LiteralPath $Root -Directory -Recurse -Force)) {
+foreach ($directory in @(Get-ChildItem -LiteralPath $Root -Directory -Recurse -Force |
+        Where-Object { -not (Test-IsGitMetadata $_.FullName) })) {
     if ($forbiddenDirectoryNames -contains $directory.Name) {
         throw "Private-data directory is forbidden in a public release: $($directory.FullName)"
     }
@@ -59,6 +66,7 @@ $forbiddenFilePatterns = @(
 )
 foreach ($pattern in $forbiddenFilePatterns) {
     $match = Get-ChildItem -LiteralPath $Root -File -Recurse -Force -Filter $pattern -ErrorAction SilentlyContinue |
+        Where-Object { -not (Test-IsGitMetadata $_.FullName) } |
         Select-Object -First 1
     if ($match) { throw "Forbidden public-release file: $($match.FullName)" }
 }
@@ -76,6 +84,7 @@ $secretPatterns = @(
 )
 
 foreach ($file in @(Get-ChildItem -LiteralPath $Root -File -Recurse -Force)) {
+    if (Test-IsGitMetadata $file.FullName) { continue }
     if ($file.FullName -match '\\dist\\') { continue }
     if ($file.Length -gt 5MB) {
         throw "Unexpected file larger than 5 MB in public source: $($file.FullName)"
@@ -92,6 +101,7 @@ foreach ($file in @(Get-ChildItem -LiteralPath $Root -File -Recurse -Force)) {
 }
 
 foreach ($script in @(Get-ChildItem -LiteralPath $Root -File -Recurse -Force -Filter "*.ps1")) {
+    if (Test-IsGitMetadata $script.FullName) { continue }
     if ($script.FullName -match '\\dist\\') { continue }
     $tokens = $null
     $errors = $null
