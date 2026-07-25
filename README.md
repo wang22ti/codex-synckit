@@ -46,15 +46,15 @@ use on top of OneDrive.
 | Environment and plugin inventories | On | A comparison snapshot of each PC; plugins are reported, not copied |
 | Codex projects | Optional | The same project workspace under the normal Windows Documents location |
 | Codex automations | Optional | Shared automation definitions; only one designated machine should run a given schedule |
-| Conversation history | Off | Lets another PC reopen and continue the same Codex tasks; it may contain complete prompts and responses |
-| Sidebar and project organization | Off | Carries task titles, pins, project grouping, ordering, and workspace hints between PCs |
+| Conversation history | On | Lets another PC reopen and continue the same Codex tasks; it may contain complete prompts and responses |
+| Sidebar and project organization | On | Carries task titles, pins, project grouping, ordering, and workspace hints between PCs |
 | Credentials, approvals, caches, logs, local preferences, `state_5.sqlite` | Never | These remain device-local for security and stability |
 
-Conversation history and sidebar organization are the privacy-sensitive
-features. They exist only for people who want their active Codex tasks and
-desktop organization to follow them to another PC. They are disabled by
-default because they can contain conversation text, project names, and local
-paths. See [Privacy](docs/PRIVACY.md) before enabling them.
+Conversation history and sidebar organization are privacy-sensitive because
+they can contain conversation text, project names, and local paths. They are
+enabled by default because carrying active Codex tasks and their organization
+between PCs is a core purpose of Codex SyncKit. Keep the generated `CodexKit`
+folder private and see [Privacy](docs/PRIVACY.md) for the data boundary.
 
 ## Comparison with other approaches
 
@@ -95,7 +95,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-CodexSyncKit.p
 This installs the bundled skill under its compatibility ID,
 `codexkit-sync`, exports the private OneDrive package, applies the recommended
 links, and creates the managed `ChatGPT` shortcut. Conversation and desktop
-state synchronization remain off unless explicitly enabled.
+state synchronization are enabled by default. Add `-ExcludeSessions` or
+`-ExcludeDesktopState` only if you deliberately do not want those categories
+in the private package.
 
 ## Normal use and synchronization precautions
 

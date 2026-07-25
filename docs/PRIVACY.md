@@ -9,7 +9,7 @@ Never publish the generated private directory.
 
 ## Data categories
 
-Default exports may include:
+Default exports include:
 
 - user-installed skills
 - portable hook definitions
@@ -18,9 +18,6 @@ Default exports may include:
 - global memory
 - device environment inventory
 - plugin inventory
-
-Explicit opt-in can additionally include:
-
 - session transcripts and their title index
 - desktop sidebar and project organization
 
@@ -36,8 +33,10 @@ fragments, pasted credentials, and other sensitive material.
 - private keys and common credential files
 - the Codex SQLite state database
 
-Exclusion is risk reduction, not a guarantee that free-form conversation text
-contains no secret. Protect the OneDrive account and review data before sharing.
+Use `-ExcludeSessions` or `-ExcludeDesktopState` when those categories should
+not be included. Exclusion is risk reduction, not a guarantee that other
+free-form content contains no secret. Protect the OneDrive account and never
+publish or share the generated private package without reviewing it.
 
 ## Telemetry
 

@@ -6,8 +6,9 @@
 .DESCRIPTION
   This script is designed for a Windows machine that already has your Codex skills, hooks,
   profiles, and global guidance configured locally. It copies the reusable parts into a
-  CodexKit folder while deliberately excluding credentials, session history, logs, caches,
-  SSH keys, tokens, and other machine-local state.
+  CodexKit folder while deliberately excluding credentials, logs, caches, SSH keys, tokens,
+  and other machine-local state. Conversation history and desktop organization are included
+  by default because cross-machine task continuity is a core SyncKit feature.
 
   Default behavior is non-destructive: it only copies/extracts files into CodexKit and writes
   a manifest. It will not modify your existing Codex setup unless you pass -InstallLinks.
@@ -22,7 +23,7 @@
   powershell -ExecutionPolicy Bypass -File .\Export-CodexKit.ps1 -CreateZip
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File .\Export-CodexKit.ps1 -IncludeSessions
+  powershell -ExecutionPolicy Bypass -File .\Export-CodexKit.ps1 -ExcludeSessions
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\Export-CodexKit.ps1 -InstallLinks
@@ -45,6 +46,8 @@ param(
     [switch]$IncludeRawConfig,
     [switch]$IncludeSessions,
     [switch]$IncludeDesktopState,
+    [switch]$ExcludeSessions,
+    [switch]$ExcludeDesktopState,
     [switch]$CreateZip,
     [switch]$InstallLinks,
     [switch]$Force,
@@ -54,12 +57,26 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = "Stop"
 
+if ($IncludeSessions -and $ExcludeSessions) {
+    throw "Choose either -IncludeSessions or -ExcludeSessions, not both."
+}
+if ($IncludeDesktopState -and $ExcludeDesktopState) {
+    throw "Choose either -IncludeDesktopState or -ExcludeDesktopState, not both."
+}
+if (-not $PSBoundParameters.ContainsKey("IncludeSessions")) {
+    $IncludeSessions = -not $ExcludeSessions
+}
+if (-not $PSBoundParameters.ContainsKey("IncludeDesktopState")) {
+    $IncludeDesktopState = -not $ExcludeDesktopState
+}
+
 $script:StartedAt = Get-Date
 $script:Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $script:Actions = New-Object System.Collections.Generic.List[object]
 $script:ManifestFiles = New-Object System.Collections.Generic.List[object]
 $script:Warnings = New-Object System.Collections.Generic.List[string]
 $script:PreviousManagedPaths = @()
+$script:ProtectedManagedPaths = @{}
 
 function Write-Info {
     param([string]$Message)
@@ -174,10 +191,11 @@ function Is-SameFileHash {
 function Add-ManifestFile {
     param([string]$Path, [string]$Category, [string]$Source)
     if ($DryRun -or -not (Test-Path -LiteralPath $Path)) { return }
+    $relative = $null
     try {
+        $relative = $Path.Substring($script:DestinationRoot.Length).TrimStart('\','/')
         $item = Get-Item -LiteralPath $Path -Force
         $hash = if (-not $item.PSIsContainer) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash } else { $null }
-        $relative = $Path.Substring($script:DestinationRoot.Length).TrimStart('\','/')
         $script:ManifestFiles.Add([pscustomobject]@{
             category = $Category
             path = $relative
@@ -187,6 +205,9 @@ function Add-ManifestFile {
             modified = $item.LastWriteTime.ToString("s")
         }) | Out-Null
     } catch {
+        if (-not [string]::IsNullOrWhiteSpace([string]$relative)) {
+            $script:ProtectedManagedPaths[[string]$relative] = $true
+        }
         Write-Warn2 "Could not add manifest entry for $Path : $($_.Exception.Message)"
     }
 }
@@ -227,6 +248,14 @@ function Remove-StaleManagedFiles {
 
     foreach ($relative in $script:PreviousManagedPaths) {
         if ($current.ContainsKey($relative)) { continue }
+        if ($relative -match '^(session-data|desktop-state)[\\/]') {
+            Write-Host "[KEEP] stale cleanup never removes conversation or desktop-state data: $relative" -ForegroundColor Yellow
+            continue
+        }
+        if ($script:ProtectedManagedPaths.ContainsKey([string]$relative)) {
+            Write-Host "[KEEP] manifest hashing failed; stale cleanup will not remove: $relative" -ForegroundColor Yellow
+            continue
+        }
         $candidate = Join-Path $script:DestinationRoot ($relative -replace '/', '\')
         $resolvedRoot = [IO.Path]::GetFullPath($script:DestinationRoot).TrimEnd('\')
         $resolvedCandidate = [IO.Path]::GetFullPath($candidate)
@@ -1852,6 +1881,10 @@ if ($Recommended) {
     $CaptureEnvironmentInventory = $true
     $InstallGlobalMemoryLink = $true
     $InstallStartMenuShortcut = $true
+    $InstallSessionLinks =
+        (Test-Path -LiteralPath (Join-Path $KitRoot "session-data\sessions") -PathType Container) -and
+        (Test-Path -LiteralPath (Join-Path $KitRoot "session-data\archived_sessions") -PathType Container) -and
+        (Test-Path -LiteralPath (Join-Path $KitRoot "session-data\session_index.jsonl") -PathType Leaf)
     $InstallResidentStartMenuShortcut = $false
 }
 
@@ -2852,8 +2885,8 @@ It is intended to live in OneDrive, while machine-local Codex state remains in `
 - `rules/`: global `AGENTS.md` / `AGENTS.override.md` if found
 - `global-memory/`: durable cross-project memory namespaces and assets
 - `memory-system/project-memory-registry.tsv`: shared project-memory registry with device-scoped local paths and portable OneDrive paths
-- `session-data/`: active/archived Codex conversations plus `session_index.jsonl` title metadata, only when exported with `-IncludeSessions`
-- `desktop-state/`: optional Codex desktop sidebar/project state used by controlled Push/Pull sync
+- `session-data/`: active/archived Codex conversations plus `session_index.jsonl` title metadata
+- `desktop-state/`: Codex desktop sidebar/project state used by controlled Push/Pull sync
 - `CodexProjects/`: optional synchronized backing store for projectless workspaces normally created under `Documents\Codex`
 - `scheduled-tasks/`: source XML plus portable settings for the memory maintenance task
 - `plugins/inventory.json`: installed plugin names and cached versions; plugin caches themselves are excluded
@@ -2869,7 +2902,6 @@ It is intended to live in OneDrive, while machine-local Codex state remains in `
 - `auth.json`
 - `history.jsonl`
 - logs, caches, and sandbox data
-- sessions unless `-IncludeSessions` is explicitly supplied
 - machine-specific command approval rules from `.codex\rules`
 - generated plugin caches (the plugin inventory is kept instead)
 - SSH keys and certificate/key files
@@ -2882,7 +2914,7 @@ cd "__DESTINATION_ROOT__"
 powershell -ExecutionPolicy Bypass -File .\Install-CodexKitForWindows.ps1 -Recommended
 ```
 
-`-Recommended` installs live skill links, global guidance links, hooks, linked global memory, captures a per-device environment inventory, and installs a Start menu shortcut named `ChatGPT`. Every machine uses the same Managed launcher. It excludes profiles, Codex configuration, sessions, Codex automations, and the memory-maintenance scheduled task. Choose model, reasoning, feature, and other Codex preferences locally on each machine. The legacy `-InstallResidentStartMenuShortcut` parameter is accepted only for command-line compatibility and installs the same Managed shortcut.
+`-Recommended` installs live skill and session links, global guidance links, hooks, linked global memory, captures a per-device environment inventory, and installs a Start menu shortcut named `ChatGPT`. Every machine uses the same Managed launcher. Conversation history and desktop organization are included by default; desktop organization uses the Managed launcher's controlled Pull/Push lifecycle. Profiles, Codex configuration, Codex automations, and the memory-maintenance scheduled task remain excluded. Choose model, reasoning, feature, and other Codex preferences locally on each machine. The legacy `-InstallResidentStartMenuShortcut` parameter is accepted only for command-line compatibility and installs the same Managed shortcut.
 
 To redirect future projectless workspaces from `Documents\Codex` into
 `CodexKit\CodexProjects`, run:
@@ -2930,19 +2962,17 @@ The installer stores its previous device name and paths in `%USERPROFILE%\.local
 
 Backups use `<target>.backup.<timestamp>`. The installer keeps the newest two backups per target by default. Override this with `-BackupRetention N`. Retention cleanup runs only after replacement succeeds; a failed link or copy restores the original target automatically.
 
-Each export removes files that were recorded in the previous manifest but are absent from the current export. Files never managed by the exporter are preserved.
+Each export removes reusable package files that were recorded in the previous
+manifest but are absent from the current export. Conversation and desktop-state
+data are never removed by stale cleanup, even after an opt-out; remove that
+private data manually only after confirming the exact target. Files never
+managed by the exporter are also preserved.
 
-The source export must be run with `-IncludeSessions` before session links are available. Desktop sidebar/project state is synchronized by `Switch-CodexMachine.cmd` instead of a live single-file link:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\skills\codex-skills\codexkit-sync\scripts\Export-CodexKit.ps1 -IncludeSessions -Force
-```
-
-To keep conversations synchronized through OneDrive, close Codex on the other machine, wait for OneDrive to finish syncing, then run:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\Install-CodexKitForWindows.ps1 -Recommended -InstallSessionLinks
-```
+Conversation history and desktop sidebar/project state are exported by default.
+`-Recommended` installs the session links, while desktop organization is
+synchronized by the Managed launcher's controlled Pull/Push lifecycle instead
+of a fragile live single-file link. Use `-ExcludeSessions` or
+`-ExcludeDesktopState` during export only when intentionally opting out.
 
 If the normal setup is already installed and only session links need repair:
 
@@ -3218,7 +3248,7 @@ try {
     }
     Write-Host ""
     Write-Host "Next recommended command on this machine, after reviewing the extracted folder:" -ForegroundColor Cyan
-    Write-Host "  powershell -ExecutionPolicy Bypass -File `"$script:DestinationRoot\Install-CodexKitForWindows.ps1`" -Recommended$(if ($IncludeSessions) { ' -InstallSessionLinks' } else { '' })" -ForegroundColor White
+    Write-Host "  powershell -ExecutionPolicy Bypass -File `"$script:DestinationRoot\Install-CodexKitForWindows.ps1`" -Recommended" -ForegroundColor White
     if ($IncludeDesktopState) {
         Write-Host "For desktop sidebar state, use: `"$script:DestinationRoot\Switch-CodexMachine.cmd`" -Action Push/Pull" -ForegroundColor White
     }

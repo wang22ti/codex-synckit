@@ -5,7 +5,11 @@ param(
     [switch]$Recommended,
     [switch]$IncludeSessions,
     [switch]$IncludeDesktopState,
+    [switch]$ExcludeSessions,
+    [switch]$ExcludeDesktopState,
     [switch]$InstallSessionLinks,
+    # Retained for compatibility with earlier alpha commands. The private-data
+    # boundary is now documented rather than gated because continuity is on by default.
     [switch]$AcceptPrivateDataRisk,
     [switch]$Force,
     [switch]$DryRun
@@ -13,6 +17,26 @@ param(
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = "Stop"
+
+if ($IncludeSessions -and $ExcludeSessions) {
+    throw "Choose either -IncludeSessions or -ExcludeSessions, not both."
+}
+if ($IncludeDesktopState -and $ExcludeDesktopState) {
+    throw "Choose either -IncludeDesktopState or -ExcludeDesktopState, not both."
+}
+
+# Conversation continuity and sidebar organization are core SyncKit features.
+# Keep the older Include switches for compatibility, while making both data
+# categories part of the normal setup unless the user explicitly opts out.
+if (-not $PSBoundParameters.ContainsKey("IncludeSessions")) {
+    $IncludeSessions = -not $ExcludeSessions
+}
+if (-not $PSBoundParameters.ContainsKey("IncludeDesktopState")) {
+    $IncludeDesktopState = -not $ExcludeDesktopState
+}
+if ($Recommended -and $IncludeSessions) {
+    $InstallSessionLinks = $true
+}
 
 function Resolve-FullPath([string]$Path) {
     return [IO.Path]::GetFullPath($Path).TrimEnd('\')
@@ -43,9 +67,6 @@ function Test-TreesEqual([string]$Left, [string]$Right) {
     return ((Get-TreeFingerprint $Left) -join "`n") -eq ((Get-TreeFingerprint $Right) -join "`n")
 }
 
-if (($IncludeSessions -or $IncludeDesktopState -or $InstallSessionLinks) -and -not $AcceptPrivateDataRisk) {
-    throw "Private-data features require -AcceptPrivateDataRisk. Review docs\PRIVACY.md first."
-}
 if ($InstallSessionLinks -and -not $IncludeSessions) {
     throw "-InstallSessionLinks requires -IncludeSessions."
 }
@@ -111,6 +132,8 @@ $exportArguments = @(
 )
 if ($IncludeSessions) { $exportArguments += "-IncludeSessions" }
 if ($IncludeDesktopState) { $exportArguments += "-IncludeDesktopState" }
+if ($ExcludeSessions) { $exportArguments += "-ExcludeSessions" }
+if ($ExcludeDesktopState) { $exportArguments += "-ExcludeDesktopState" }
 if ($DryRun) { $exportArguments += "-DryRun" }
 
 & powershell.exe @exportArguments
