@@ -4,8 +4,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-README_EN="$SKILL_DIR/README.md"
-README_ZH="$SKILL_DIR/README.zh-CN.md"
+LANDING_EN="$SKILL_DIR/README.md"
+LANDING_ZH="$SKILL_DIR/README.zh-CN.md"
+README_EN="$SKILL_DIR/TECHNICAL.md"
+README_ZH="$SKILL_DIR/TECHNICAL.zh-CN.md"
 SKILL_MD="$SKILL_DIR/SKILL.md"
 MAINTAINER_REF="$SKILL_DIR/references/maintainer-reference.md"
 HOOKS_SETUP="$SKILL_DIR/references/hooks-setup.md"
@@ -61,15 +63,60 @@ assert_max_lines() {
     [[ "$actual_lines" -le "$max_lines" ]] || fail "expected $path to stay within $max_lines lines but found $actual_lines"
 }
 
+assert_h2_sequence() {
+    local path="$1"
+    shift
+    local actual=""
+    local expected=""
+    local heading=""
+
+    actual="$(grep '^## ' "$path")"
+    for heading in "$@"; do
+        expected="${expected}${expected:+$'\n'}## $heading"
+    done
+
+    [[ "$actual" == "$expected" ]] || fail "unexpected H2 sequence in $path"
+}
+
 assert_file "$README_EN"
 assert_file "$README_ZH"
+assert_file "$LANDING_EN"
+assert_file "$LANDING_ZH"
 assert_file "$SKILL_MD"
 assert_file "$MAINTAINER_REF"
 assert_file "$HOOKS_SETUP"
 assert_file "$SKILL_DIR/scripts/shared/memory-config.sh"
 assert_file "$SKILL_DIR/config/defaults.toml"
 
-# Required high-level sections stay present.
+# The landing READMEs stay concise and follow the main project structure.
+assert_max_lines "$LANDING_EN" 200
+assert_max_lines "$LANDING_ZH" 200
+assert_contains "$LANDING_EN" "## Installation and use"
+assert_contains "$LANDING_EN" "## How it works"
+assert_contains "$LANDING_EN" "## What it remembers"
+assert_contains "$LANDING_EN" "## Compared with other memory approaches"
+assert_contains "$LANDING_EN" "## Limitations"
+assert_contains "$LANDING_EN" "TECHNICAL.md"
+assert_h2_sequence "$LANDING_EN" \
+    "Installation and use" \
+    "How it works" \
+    "What it remembers" \
+    "Compared with other memory approaches" \
+    "Limitations"
+assert_contains "$LANDING_ZH" "## 安装与使用"
+assert_contains "$LANDING_ZH" "## 工作原理"
+assert_contains "$LANDING_ZH" "## 记录什么"
+assert_contains "$LANDING_ZH" "## 与其他记忆方式对比"
+assert_contains "$LANDING_ZH" "## 限制"
+assert_contains "$LANDING_ZH" "TECHNICAL.zh-CN.md"
+assert_h2_sequence "$LANDING_ZH" \
+    "安装与使用" \
+    "工作原理" \
+    "记录什么" \
+    "与其他记忆方式对比" \
+    "限制"
+
+# Required technical sections stay present in the detailed references.
 assert_contains "$README_EN" "## Why This Memory System"
 assert_contains "$README_EN" "## Closed-Loop Runtime Model"
 assert_contains "$README_EN" "## Maintainer Reference"
@@ -167,6 +214,8 @@ done
 # Human-facing docs should not regress to stale path guidance.
 assert_not_contains "$README_EN" "/home/"
 assert_not_contains "$README_ZH" "/home/"
+assert_not_contains "$LANDING_EN" "/home/"
+assert_not_contains "$LANDING_ZH" "/home/"
 assert_not_contains "$SKILL_MD" "/home/"
 assert_not_contains "$MAINTAINER_REF" "/home/"
 assert_not_contains "$HOOKS_SETUP" "/home/"

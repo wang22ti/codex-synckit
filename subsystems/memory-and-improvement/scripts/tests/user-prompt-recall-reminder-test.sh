@@ -46,6 +46,11 @@ crontab_only_output="$(
         XDG_STATE_HOME=/tmp bash "$HOOK_SCRIPT"
 )"
 
+profile_output="$(
+    printf '%s' '{"hook_event_name":"UserPromptSubmit","session_id":"sess-127","prompt":"What do you know about my profile?"}' |
+        XDG_STATE_HOME=/tmp bash "$HOOK_SCRIPT"
+)"
+
 non_matching_output="$(
     printf '%s' '{"hook_event_name":"SessionStart"}' |
         XDG_STATE_HOME=/tmp bash "$HOOK_SCRIPT"
@@ -76,6 +81,9 @@ assert_not_contains "$defaults_only_output" "install-nightly-maintenance.sh --ap
 assert_not_contains "$defaults_only_output" "live crontab stays in sync"
 assert_not_contains "$crontab_only_output" "install-nightly-maintenance.sh --apply"
 assert_not_contains "$crontab_only_output" "live crontab stays in sync"
+assert_contains "$profile_output" "<memory-turn-reminder>"
+assert_not_contains "$profile_output" "<memory-auto-recall>"
+assert_not_contains "$profile_output" "user-profile/SUMMARY.md"
 
 if [[ -n "$non_matching_output" ]]; then
     printf 'Expected non-matching hook event to produce no output\n' >&2

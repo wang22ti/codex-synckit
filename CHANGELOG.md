@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Reorganized the `memory-and-improvement` README around the same five-part
+  structure as the main project, while moving detailed maintainer material to
+  dedicated technical references.
+- Made the `UserPromptSubmit` memory hook fully reminder-only, including
+  user-profile prompts; recall and reflection remain main-session decisions.
+
 ## 0.1.0-alpha - 2026-07-25
 
 - Renamed the public project from CodexKit Sync to Codex SyncKit.
