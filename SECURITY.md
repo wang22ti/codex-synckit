@@ -9,7 +9,9 @@ are provided for evaluation and may change without compatibility guarantees.
 
 Do not open a public issue for a vulnerability that could expose credentials,
 conversation contents, private paths, or permit unintended command execution.
-Use GitHub's private vulnerability reporting feature for the repository.
+Use GitHub's
+[private vulnerability reporting form](https://github.com/wang22ti/codex-synckit/security/advisories/new)
+for the repository.
 
 Include:
 

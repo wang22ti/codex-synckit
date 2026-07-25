@@ -1,0 +1,38 @@
+name: Feature request
+description: Propose a platform, backend, or synchronization improvement
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What limitation or workflow problem should be addressed?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - OneDrive
+        - Other synchronization backend
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Data and safety considerations
+      description: Describe any data that would be read, written, linked, moved, or deleted.

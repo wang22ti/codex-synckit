@@ -13,11 +13,16 @@ Git is used by contributors only. It is not an end-user requirement.
 1. Change the canonical exporter under `skill/scripts/Export-CodexKit.ps1`.
 2. Parse every PowerShell file with the PowerShell language parser.
 3. Run the Node and PowerShell regression tests.
-4. Test an export against a disposable destination.
-5. Run `tools/Test-PublicRelease.ps1`.
-6. Update `CHANGELOG.md`.
+4. Run `bash ./tools/Test-MemorySubsystem.sh`.
+5. Test an export against a disposable destination.
+6. Run `tools/Test-PublicRelease.ps1` and `tools/Build-Release.ps1`.
+7. Update `CHANGELOG.md`.
 
 Never use a real generated CodexKit as a pull-request fixture.
+
+Maintainers publish a release by pushing a version tag such as
+`v0.1.0-alpha`. The release workflow rebuilds and rescans the ZIP before
+creating the GitHub Release; do not upload an independently assembled archive.
 
 ## Pull requests
 
@@ -34,22 +39,17 @@ rollback, or fail-closed startup require explicit security review.
 
 ## Maintainer and acknowledgements
 
-Codex SyncKit was created and is maintained by
-[Codex SyncKit Maintainer](https://github.com/wang22ti/codex-synckit).
+Codex SyncKit is maintained by the project maintainers.
 
-The bundled `memory-and-improvement` subsystem began as an adaptation of
-[`self-improvement`](https://github.com/pskoett/pskoett-ai-skills/tree/main/skills/self-improvement)
-and its standalone
-[`self-improving-agent`](https://github.com/pskoett/self-improving-agent)
-package by [pskoett](https://github.com/pskoett). Their project-level
+The bundled `memory-and-improvement` subsystem uses and adapts portions of the
+MIT-licensed
+[`self-improvement`](https://github.com/pskoett/pskoett-ai-skills/tree/20e64cec1529d9c371fdcc20c751b7ef10b68af7/plugin/skills/self-improvement)
+plugin by [Peter Skøtt Pedersen](https://github.com/pskoett). Its project-level
 `.learnings` structure, learning/error/feature-request records, promotion
-workflow, and skill-extraction pattern provided the starting point.
+workflow, and skill-extraction pattern provided the starting point. Only this
+MIT-licensed plugin copy was used as the upstream source.
 
 This adaptation adds project-versus-global memory routing, cross-project
 namespaces, recall and search, maintenance and writeback workflows, and
-Codex/Windows synchronization integration.
-
-No explicit license file was found in the upstream repository roots or skill
-directory when this acknowledgement was added on 2026-07-25. Attribution does
-not replace any permission required to redistribute derived material. Verify
-the upstream terms or obtain permission before distributing this subsystem.
+Codex/Windows synchronization integration. The upstream copyright and complete
+MIT license are retained in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

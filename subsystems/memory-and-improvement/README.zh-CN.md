@@ -4,7 +4,9 @@
 
 这份 README 面向人类维护者编写。它说明了当前实现的架构、预期工作流、主要脚本、自动化模型以及运行边界。
 
-如果需要看紧凑、可作为维护基准的规则参考，请看 [references/maintainer-reference.md](~/.codex/skills/memory-and-improvement/references/maintainer-reference.md)。这份 README 会刻意保持“概览优先”。
+如果需要看紧凑、可作为维护基准的规则参考，请看
+[references/maintainer-reference.md](references/maintainer-reference.md)。这份 README
+会刻意保持“概览优先”。
 
 ## 这个技能的用途
 
@@ -253,7 +255,7 @@
 
 这份 README 是给人看的总览，不是完整的 canonical policy 文档。
 
-当你需要查看下面这些稳定规则时，请优先看 [references/maintainer-reference.md](~/.codex/skills/memory-and-improvement/references/maintainer-reference.md)：
+当你需要查看下面这些稳定规则时，请优先看 [references/maintainer-reference.md](references/maintainer-reference.md)：
 
 - 路由边界
 - progressive loading 顺序
@@ -995,15 +997,15 @@ bash ~/.codex/skills/memory-and-improvement/scripts/tests/log-asset-test.sh
 
 当前提供的 shortcuts：
 
-- [`scripts/shortcuts/remember-project-fact.sh`](~/.codex/skills/memory-and-improvement/scripts/shortcuts/remember-project-fact.sh)
+- [`scripts/shortcuts/remember-project-fact.sh`](scripts/shortcuts/remember-project-fact.sh)
   - 用默认 `--scope project --type learning --category insight` 调 `log-memory.sh`
-- [`scripts/shortcuts/remember-global-fact.sh`](~/.codex/skills/memory-and-improvement/scripts/shortcuts/remember-global-fact.sh)
+- [`scripts/shortcuts/remember-global-fact.sh`](scripts/shortcuts/remember-global-fact.sh)
   - 用默认 `--scope global --type learning --category insight` 调 `log-memory.sh`
-- [`scripts/shortcuts/remember-error.sh`](~/.codex/skills/memory-and-improvement/scripts/shortcuts/remember-error.sh)
+- [`scripts/shortcuts/remember-error.sh`](scripts/shortcuts/remember-error.sh)
   - 用默认 `--scope project --type error` 调 `log-memory.sh`
-- [`scripts/shortcuts/index-factual-file.sh`](~/.codex/skills/memory-and-improvement/scripts/shortcuts/index-factual-file.sh)
+- [`scripts/shortcuts/index-factual-file.sh`](scripts/shortcuts/index-factual-file.sh)
   - 用默认 `--scope global --type structured_fact_file` 调 `log-asset.sh`
-- [`scripts/shortcuts/index-asset.sh`](~/.codex/skills/memory-and-improvement/scripts/shortcuts/index-asset.sh)
+- [`scripts/shortcuts/index-asset.sh`](scripts/shortcuts/index-asset.sh)
   - 用默认 `--scope project` 调 `log-asset.sh`
 
 每个 shortcut 都会把额外参数原样转发给底层核心脚本，所以如果后面显式传了同名参数，仍然可以覆盖默认值。
@@ -1034,7 +1036,7 @@ bash ~/.codex/skills/memory-and-improvement/scripts/tests/docs-consistency-test.
 
 它现在会从以下位置读取规范模板块：
 
-- [`references/SKILL-TEMPLATE.md`](~/.codex/skills/memory-and-improvement/references/SKILL-TEMPLATE.md)
+- [`references/SKILL-TEMPLATE.md`](references/SKILL-TEMPLATE.md)
 
 因此，模板资源文件才是真正的单一事实来源。
 
@@ -1104,7 +1106,7 @@ cron
 
 召回与提炼路径使用：
 
-- [`scripts/shared/memory-entry-parser.awk`](~/.codex/skills/memory-and-improvement/scripts/shared/memory-entry-parser.awk)
+- [`scripts/shared/memory-entry-parser.awk`](scripts/shared/memory-entry-parser.awk)
 
 这个解析器会提取：
 
@@ -1456,8 +1458,8 @@ bash ~/.codex/skills/memory-and-improvement/scripts/capture/extract-skill.sh \
 
 推荐按这个顺序工作：
 
-1. 当稳定策略发生变化时，先改 [references/maintainer-reference.md](~/.codex/skills/memory-and-improvement/references/maintainer-reference.md)
-2. 把 [SKILL.md](~/.codex/skills/memory-and-improvement/SKILL.md) 控制在运行时行为和短 guardrails 的范围内
+1. 当稳定策略发生变化时，先改 [references/maintainer-reference.md](references/maintainer-reference.md)
+2. 把 [SKILL.md](SKILL.md) 控制在运行时行为和短 guardrails 的范围内
 3. 让 `README.md` 和 `README.zh-CN.md` 保持人类可读的总结，而不是完整 policy dump
 
 保持脚本目录纪律：
@@ -1528,15 +1530,15 @@ bash ~/.codex/skills/memory-and-improvement/scripts/maintenance/install-nightly-
 
 ## 相关文件
 
-- [`SKILL.md`](~/.codex/skills/memory-and-improvement/SKILL.md)
-- [`scripts/shared/memory-paths.sh`](~/.codex/skills/memory-and-improvement/scripts/shared/memory-paths.sh)
-- [`scripts/capture/log-memory.sh`](~/.codex/skills/memory-and-improvement/scripts/capture/log-memory.sh)
-- [`scripts/recall/review-memory.sh`](~/.codex/skills/memory-and-improvement/scripts/recall/review-memory.sh)
-- [`scripts/maintenance/organize-memory.sh`](~/.codex/skills/memory-and-improvement/scripts/maintenance/organize-memory.sh)
-- [`scripts/maintenance/writeback-memory.sh`](~/.codex/skills/memory-and-improvement/scripts/maintenance/writeback-memory.sh)
-- [`scripts/maintenance/update-skill-policy.sh`](~/.codex/skills/memory-and-improvement/scripts/maintenance/update-skill-policy.sh)
-- [`scripts/maintenance/git-memory.sh`](~/.codex/skills/memory-and-improvement/scripts/maintenance/git-memory.sh)
-- [`scripts/maintenance/nightly-maintenance.sh`](~/.codex/skills/memory-and-improvement/scripts/maintenance/nightly-maintenance.sh)
-- [`scripts/maintenance/install-nightly-maintenance.sh`](~/.codex/skills/memory-and-improvement/scripts/maintenance/install-nightly-maintenance.sh)
-- [`scripts/capture/extract-skill.sh`](~/.codex/skills/memory-and-improvement/scripts/capture/extract-skill.sh)
-- [`references/SKILL-TEMPLATE.md`](~/.codex/skills/memory-and-improvement/references/SKILL-TEMPLATE.md)
+- [`SKILL.md`](SKILL.md)
+- [`scripts/shared/memory-paths.sh`](scripts/shared/memory-paths.sh)
+- [`scripts/capture/log-memory.sh`](scripts/capture/log-memory.sh)
+- [`scripts/recall/review-memory.sh`](scripts/recall/review-memory.sh)
+- [`scripts/maintenance/organize-memory.sh`](scripts/maintenance/organize-memory.sh)
+- [`scripts/maintenance/writeback-memory.sh`](scripts/maintenance/writeback-memory.sh)
+- [`scripts/maintenance/update-skill-policy.sh`](scripts/maintenance/update-skill-policy.sh)
+- [`scripts/maintenance/git-memory.sh`](scripts/maintenance/git-memory.sh)
+- [`scripts/maintenance/nightly-maintenance.sh`](scripts/maintenance/nightly-maintenance.sh)
+- [`scripts/maintenance/install-nightly-maintenance.sh`](scripts/maintenance/install-nightly-maintenance.sh)
+- [`scripts/capture/extract-skill.sh`](scripts/capture/extract-skill.sh)
+- [`references/SKILL-TEMPLATE.md`](references/SKILL-TEMPLATE.md)
