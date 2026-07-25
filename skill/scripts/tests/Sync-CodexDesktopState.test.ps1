@@ -6,6 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $sourceScripts = Split-Path -Parent $PSScriptRoot
 $sourceKitRoot = (Resolve-Path -LiteralPath (Join-Path $sourceScripts "..\..\..\..")).Path
+$publicSourceRoot = (Resolve-Path -LiteralPath (Join-Path $sourceScripts "..\..")).Path
 $nodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
 if (-not $nodeCommand) { $nodeCommand = Get-Command node -ErrorAction Stop }
 $node = $nodeCommand.Source
@@ -75,7 +76,7 @@ function Invoke-StateSync($Fixture, [string]$Mode) {
 }
 
 try {
-    $isPublicSourceTree = Test-Path -LiteralPath (Join-Path $sourceKitRoot "Install-CodexKitSync.ps1") -PathType Leaf
+    $isPublicSourceTree = Test-Path -LiteralPath (Join-Path $publicSourceRoot "Install-CodexKitSync.ps1") -PathType Leaf
     if (-not $isPublicSourceTree) {
         foreach ($managedLauncher in @("Start-CodexManaged.cmd", "Start-CodexManaged.vbs")) {
             Assert-True (Test-Path -LiteralPath (Join-Path $sourceKitRoot $managedLauncher) -PathType Leaf) "Missing unified launcher: $managedLauncher"
