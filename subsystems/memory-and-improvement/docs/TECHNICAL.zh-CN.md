@@ -1,13 +1,13 @@
 # memory-and-improvement 技术参考
 
-[概览](README.zh-CN.md) · [English](TECHNICAL.md)
+[概览](../README.zh-CN.md) · [English](TECHNICAL.md)
 
 这是一个仅供 Codex 使用的记忆技能，用于记录项目内记忆、跨项目的全局记忆，以及那些应当升级为独立 Codex 技能的可复用流程。
 
 这份参考面向维护者，说明当前实现的架构、预期工作流、主要脚本、自动化模型和运行边界。
 
 如果需要看紧凑、可作为维护基准的规则参考，请看
-[references/maintainer-reference.md](references/maintainer-reference.md)。
+[references/maintainer-reference.md](../references/maintainer-reference.md)。
 
 ## 这个技能的用途
 
@@ -81,7 +81,7 @@
 
 - 专门的 recall helper 现在已经有了，也就是 `scripts/recall/recall-memory.sh`
 - 专门的 reflect helper 现在已经有了，也就是 `scripts/recall/reflect-memory.sh`
-- 当前 hook 配置会在 `SessionStart` 时注入运行时 guidance，并在 `UserPromptSubmit` 时提醒主会话回答前 recall、最终回答前 reflect
+- Windows CodexKit 适配器会在 `SessionStart` 注入运行时 guidance；其 `UserPromptSubmit` 适配器只给出 recall 提醒，并在明确的身份提示下按需注入 `user-profile/SUMMARY.md`；独立 Bash 适配器才额外包含 reflect 提醒
 - `suggest-promotions.sh` 和 `reflect-memory.sh` 都是 advisory helper，而 nightly organize/writeback 仍然只是 supportive distillation，不是 authoritative promotion
 - `scripts/maintenance/update-skill-policy.sh` 是唯一允许自动改写 `SKILL.md` 的路径，而且只允许改受管的 routing-strategy 区块，不会改整份 skill 本体
 
@@ -98,7 +98,9 @@
 - 不确定该记到哪一层 -> 默认先记到项目记忆，除非你已经明确知道它下周在别的仓库里也会有用
 - 不确定这件事到底值不值得记 -> 通常也可以先放进 `.learnings/*.md`
 
-日常记录时，如果某个快捷脚本正好适用，就优先用 `scripts/shortcuts/`。但回顾、搜索、初始化和升级建议这些动作，还是直接用核心脚本。
+正常使用时，由 Hook guidance 提醒当前 Codex 会话选择合适的辅助脚本。
+快捷脚本和核心脚本都是内部集成入口；只有维护、诊断、恢复，或没有托管 Hook
+适配器的独立安装，才需要直接运行。
 
 ## 不确定时怎么办
 
@@ -256,7 +258,7 @@
 
 这份 README 是给人看的总览，不是完整的 canonical policy 文档。
 
-当你需要查看下面这些稳定规则时，请优先看 [references/maintainer-reference.md](references/maintainer-reference.md)：
+当你需要查看下面这些稳定规则时，请优先看 [references/maintainer-reference.md](../references/maintainer-reference.md)：
 
 - 路由边界
 - progressive loading 顺序
@@ -357,7 +359,7 @@ asset 也只有在“这个文件本身值得被重新发现”时才需要索�
 
 #### 项目记忆数据流
 
-![.learnings 目录数据流](./assets/learnings-directory-data-flow.svg)
+![.learnings 目录数据流](../assets/learnings-directory-data-flow.svg)
 
 这张图展示了单个项目 `.learnings/` 目录内部的分工关系：
 
@@ -998,15 +1000,15 @@ bash ~/.codex/skills/memory-and-improvement/scripts/tests/log-asset-test.sh
 
 当前提供的 shortcuts：
 
-- [`scripts/shortcuts/remember-project-fact.sh`](scripts/shortcuts/remember-project-fact.sh)
+- [`scripts/shortcuts/remember-project-fact.sh`](../scripts/shortcuts/remember-project-fact.sh)
   - 用默认 `--scope project --type learning --category insight` 调 `log-memory.sh`
-- [`scripts/shortcuts/remember-global-fact.sh`](scripts/shortcuts/remember-global-fact.sh)
+- [`scripts/shortcuts/remember-global-fact.sh`](../scripts/shortcuts/remember-global-fact.sh)
   - 用默认 `--scope global --type learning --category insight` 调 `log-memory.sh`
-- [`scripts/shortcuts/remember-error.sh`](scripts/shortcuts/remember-error.sh)
+- [`scripts/shortcuts/remember-error.sh`](../scripts/shortcuts/remember-error.sh)
   - 用默认 `--scope project --type error` 调 `log-memory.sh`
-- [`scripts/shortcuts/index-factual-file.sh`](scripts/shortcuts/index-factual-file.sh)
+- [`scripts/shortcuts/index-factual-file.sh`](../scripts/shortcuts/index-factual-file.sh)
   - 用默认 `--scope global --type structured_fact_file` 调 `log-asset.sh`
-- [`scripts/shortcuts/index-asset.sh`](scripts/shortcuts/index-asset.sh)
+- [`scripts/shortcuts/index-asset.sh`](../scripts/shortcuts/index-asset.sh)
   - 用默认 `--scope project` 调 `log-asset.sh`
 
 每个 shortcut 都会把额外参数原样转发给底层核心脚本，所以如果后面显式传了同名参数，仍然可以覆盖默认值。
@@ -1037,13 +1039,13 @@ bash ~/.codex/skills/memory-and-improvement/scripts/tests/docs-consistency-test.
 
 它现在会从以下位置读取规范模板块：
 
-- [`references/SKILL-TEMPLATE.md`](references/SKILL-TEMPLATE.md)
+- [`references/SKILL-TEMPLATE.md`](../references/SKILL-TEMPLATE.md)
 
 因此，模板资源文件才是真正的单一事实来源。
 
 ## 按流程划分的架构
 
-![记忆更新与加载流程](./assets/memory-update-and-loading-flow.svg)
+![记忆更新与加载流程](../assets/memory-update-and-loading-flow.svg)
 
 这张图展示了当前实现的运行模型：
 
@@ -1107,7 +1109,7 @@ cron
 
 召回与提炼路径使用：
 
-- [`scripts/shared/memory-entry-parser.awk`](scripts/shared/memory-entry-parser.awk)
+- [`scripts/shared/memory-entry-parser.awk`](../scripts/shared/memory-entry-parser.awk)
 
 这个解析器会提取：
 
@@ -1459,8 +1461,8 @@ bash ~/.codex/skills/memory-and-improvement/scripts/capture/extract-skill.sh \
 
 推荐按这个顺序工作：
 
-1. 当稳定策略发生变化时，先改 [references/maintainer-reference.md](references/maintainer-reference.md)
-2. 把 [SKILL.md](SKILL.md) 控制在运行时行为和短 guardrails 的范围内
+1. 当稳定策略发生变化时，先改 [references/maintainer-reference.md](../references/maintainer-reference.md)
+2. 把 [SKILL.md](../SKILL.md) 控制在运行时行为和短 guardrails 的范围内
 3. 让 `README.md` 和 `README.zh-CN.md` 保持人类可读的总结，而不是完整 policy dump
 
 保持脚本目录纪律：
@@ -1511,9 +1513,10 @@ bash ~/.codex/skills/memory-and-improvement/scripts/capture/extract-skill.sh \
 - 面向人的解释 -> 双语 README
 - 可执行约束或回归保护 -> scripts/tests
 
-## 快速开始
+## 维护与诊断入口
 
-如果你只是想用它：
+日常使用 Codex 不需要执行下面这些命令。独立安装、验证、排错或恢复时，维护者
+可以直接调用同一组辅助脚本：
 
 ```bash
 bash ~/.codex/skills/memory-and-improvement/scripts/bootstrap/init-memory.sh --scope both --project-root "$PWD"
@@ -1522,7 +1525,7 @@ bash ~/.codex/skills/memory-and-improvement/scripts/capture/log-memory.sh --scop
 bash ~/.codex/skills/memory-and-improvement/scripts/maintenance/install-nightly-maintenance.sh --scope both --hour 4 --minute 0 --writeback true
 ```
 
-这会提供：
+这些示例会验证：
 
 - 已初始化的项目/全局记忆
 - 回顾快照
@@ -1531,15 +1534,15 @@ bash ~/.codex/skills/memory-and-improvement/scripts/maintenance/install-nightly-
 
 ## 相关文件
 
-- [`SKILL.md`](SKILL.md)
-- [`scripts/shared/memory-paths.sh`](scripts/shared/memory-paths.sh)
-- [`scripts/capture/log-memory.sh`](scripts/capture/log-memory.sh)
-- [`scripts/recall/review-memory.sh`](scripts/recall/review-memory.sh)
-- [`scripts/maintenance/organize-memory.sh`](scripts/maintenance/organize-memory.sh)
-- [`scripts/maintenance/writeback-memory.sh`](scripts/maintenance/writeback-memory.sh)
-- [`scripts/maintenance/update-skill-policy.sh`](scripts/maintenance/update-skill-policy.sh)
-- [`scripts/maintenance/git-memory.sh`](scripts/maintenance/git-memory.sh)
-- [`scripts/maintenance/nightly-maintenance.sh`](scripts/maintenance/nightly-maintenance.sh)
-- [`scripts/maintenance/install-nightly-maintenance.sh`](scripts/maintenance/install-nightly-maintenance.sh)
-- [`scripts/capture/extract-skill.sh`](scripts/capture/extract-skill.sh)
-- [`references/SKILL-TEMPLATE.md`](references/SKILL-TEMPLATE.md)
+- [`SKILL.md`](../SKILL.md)
+- [`scripts/shared/memory-paths.sh`](../scripts/shared/memory-paths.sh)
+- [`scripts/capture/log-memory.sh`](../scripts/capture/log-memory.sh)
+- [`scripts/recall/review-memory.sh`](../scripts/recall/review-memory.sh)
+- [`scripts/maintenance/organize-memory.sh`](../scripts/maintenance/organize-memory.sh)
+- [`scripts/maintenance/writeback-memory.sh`](../scripts/maintenance/writeback-memory.sh)
+- [`scripts/maintenance/update-skill-policy.sh`](../scripts/maintenance/update-skill-policy.sh)
+- [`scripts/maintenance/git-memory.sh`](../scripts/maintenance/git-memory.sh)
+- [`scripts/maintenance/nightly-maintenance.sh`](../scripts/maintenance/nightly-maintenance.sh)
+- [`scripts/maintenance/install-nightly-maintenance.sh`](../scripts/maintenance/install-nightly-maintenance.sh)
+- [`scripts/capture/extract-skill.sh`](../scripts/capture/extract-skill.sh)
+- [`references/SKILL-TEMPLATE.md`](../references/SKILL-TEMPLATE.md)

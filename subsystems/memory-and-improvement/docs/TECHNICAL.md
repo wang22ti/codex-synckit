@@ -1,13 +1,13 @@
 # memory-and-improvement technical reference
 
-[Overview](README.md) · [简体中文](TECHNICAL.zh-CN.md)
+[Overview](../README.md) · [简体中文](TECHNICAL.zh-CN.md)
 
 Codex-only memory skill for capturing project-local memory, cross-project global memory, and reusable procedures that should graduate into standalone Codex skills.
 
 This reference is written for maintainers. It explains the architecture, intended workflows, major scripts, automation model, and operational boundaries of the current implementation.
 
 For the compact canonical maintainer policy reference, see
-[references/maintainer-reference.md](references/maintainer-reference.md).
+[references/maintainer-reference.md](../references/maintainer-reference.md).
 
 ## What This Skill Is For
 
@@ -82,7 +82,7 @@ Current truth-in-advertising note:
 
 - the dedicated recall helper now exists as `scripts/recall/recall-memory.sh`
 - the dedicated reflect helper now exists as `scripts/recall/reflect-memory.sh`
-- the current hook setup injects runtime guidance on `SessionStart`, while `UserPromptSubmit` reminds the main session to recall before replying and reflect before the final response
+- the Windows CodexKit adapter injects runtime guidance on `SessionStart`; its `UserPromptSubmit` adapter emits a recall reminder and may inject `user-profile/SUMMARY.md` for an explicit identity cue, while the standalone Bash adapter also includes a reflect reminder
 - `suggest-promotions.sh` and `reflect-memory.sh` are advisory helpers, while nightly organize/writeback remains supportive distillation rather than authoritative promotion
 - `scripts/maintenance/update-skill-policy.sh` is the only automatic rewrite path for `SKILL.md`, and it is limited to the managed routing-strategy block rather than the full skill body
 
@@ -99,7 +99,10 @@ Start with this minimal routing rule:
 - not sure about scope -> default to project memory unless you already know it should help in a different repository next week
 - not sure whether it is worth recording at all -> it is usually fine to capture it in `.learnings/*.md` first
 
-For day-to-day logging, prefer the shortcut scripts under `scripts/shortcuts/` when one fits. For review, search, initialization, and promotion suggestion, use the core scripts directly.
+During normal use, the Hook guidance leads the active Codex session to choose
+the appropriate helper. Shortcut and core scripts are internal integration
+entry points; direct execution is for maintainers, diagnostics, recovery, or a
+standalone installation without the managed Hook adapters.
 
 ## If You Are Unsure
 
@@ -257,7 +260,7 @@ One concise way to frame it is:
 
 This README is the human-facing overview, not the full canonical policy document.
 
-Use [references/maintainer-reference.md](references/maintainer-reference.md) when you need the compact source for:
+Use [references/maintainer-reference.md](../references/maintainer-reference.md) when you need the compact source for:
 
 - routing boundaries
 - progressive loading order
@@ -358,7 +361,7 @@ By default:
 
 #### Project Memory Data Flow
 
-![.learnings directory data flow](./assets/learnings-directory-data-flow.svg)
+![.learnings directory data flow](../assets/learnings-directory-data-flow.svg)
 
 This figure shows the internal job split inside one project `.learnings/` directory:
 
@@ -1015,15 +1018,15 @@ Thin convenience wrappers live in one place so the script tree stays predictable
 
 Current shortcuts:
 
-- [`scripts/shortcuts/remember-project-fact.sh`](scripts/shortcuts/remember-project-fact.sh)
+- [`scripts/shortcuts/remember-project-fact.sh`](../scripts/shortcuts/remember-project-fact.sh)
   - wraps `log-memory.sh` with default `--scope project --type learning --category insight`
-- [`scripts/shortcuts/remember-global-fact.sh`](scripts/shortcuts/remember-global-fact.sh)
+- [`scripts/shortcuts/remember-global-fact.sh`](../scripts/shortcuts/remember-global-fact.sh)
   - wraps `log-memory.sh` with default `--scope global --type learning --category insight`
-- [`scripts/shortcuts/remember-error.sh`](scripts/shortcuts/remember-error.sh)
+- [`scripts/shortcuts/remember-error.sh`](../scripts/shortcuts/remember-error.sh)
   - wraps `log-memory.sh` with default `--scope project --type error`
-- [`scripts/shortcuts/index-factual-file.sh`](scripts/shortcuts/index-factual-file.sh)
+- [`scripts/shortcuts/index-factual-file.sh`](../scripts/shortcuts/index-factual-file.sh)
   - wraps `log-asset.sh` with default `--scope global --type structured_fact_file`
-- [`scripts/shortcuts/index-asset.sh`](scripts/shortcuts/index-asset.sh)
+- [`scripts/shortcuts/index-asset.sh`](../scripts/shortcuts/index-asset.sh)
   - wraps `log-asset.sh` with default `--scope project`
 
 Each shortcut forwards additional arguments to the underlying core script, so explicit later flags can still override the defaults when needed.
@@ -1054,13 +1057,13 @@ Creates a skill scaffold from a reusable learning.
 
 It now reads the canonical template block from:
 
-- [`references/SKILL-TEMPLATE.md`](references/SKILL-TEMPLATE.md)
+- [`references/SKILL-TEMPLATE.md`](../references/SKILL-TEMPLATE.md)
 
 so the template asset is the real source of truth.
 
 ## Architecture by Flow
 
-![Memory update and loading flow](./assets/memory-update-and-loading-flow.svg)
+![Memory update and loading flow](../assets/memory-update-and-loading-flow.svg)
 
 This diagram shows the current operating model:
 
@@ -1124,7 +1127,7 @@ cron
 
 The recall and distillation path uses:
 
-- [`scripts/shared/memory-entry-parser.awk`](scripts/shared/memory-entry-parser.awk)
+- [`scripts/shared/memory-entry-parser.awk`](../scripts/shared/memory-entry-parser.awk)
 
 This parser extracts:
 
@@ -1476,8 +1479,8 @@ If you maintain this system over time, optimize for consolidation and low-noise 
 
 Use this working order:
 
-1. Update [references/maintainer-reference.md](references/maintainer-reference.md) first when a stable policy changes.
-2. Keep [`SKILL.md`](SKILL.md) limited to runtime behavior and short guardrails.
+1. Update [references/maintainer-reference.md](../references/maintainer-reference.md) first when a stable policy changes.
+2. Keep [`SKILL.md`](../SKILL.md) limited to runtime behavior and short guardrails.
 3. Keep this README and `README.zh-CN.md` as human-readable summaries rather than full policy dumps.
 
 Keep the script layout disciplined:
@@ -1528,9 +1531,11 @@ When you are unsure where to put a new rule:
 - human-facing explanation -> README files
 - executable enforcement or regression protection -> scripts/tests
 
-## Quick Start
+## Maintainer and diagnostic entry points
 
-If you just want to use it:
+Ordinary Codex use does not require these commands. For standalone setup,
+verification, troubleshooting, or recovery, maintainers can invoke the same
+helpers directly:
 
 ```bash
 bash ~/.codex/skills/memory-and-improvement/scripts/bootstrap/init-memory.sh --scope both --project-root "$PWD"
@@ -1539,7 +1544,7 @@ bash ~/.codex/skills/memory-and-improvement/scripts/capture/log-memory.sh --scop
 bash ~/.codex/skills/memory-and-improvement/scripts/maintenance/install-nightly-maintenance.sh --scope both --hour 4 --minute 0 --writeback true
 ```
 
-That gives you:
+These examples exercise:
 
 - initialized project/global memory
 - review snapshots
@@ -1548,15 +1553,15 @@ That gives you:
 
 ## Related Files
 
-- [`SKILL.md`](SKILL.md)
-- [`scripts/shared/memory-paths.sh`](scripts/shared/memory-paths.sh)
-- [`scripts/capture/log-memory.sh`](scripts/capture/log-memory.sh)
-- [`scripts/recall/review-memory.sh`](scripts/recall/review-memory.sh)
-- [`scripts/maintenance/organize-memory.sh`](scripts/maintenance/organize-memory.sh)
-- [`scripts/maintenance/writeback-memory.sh`](scripts/maintenance/writeback-memory.sh)
-- [`scripts/maintenance/update-skill-policy.sh`](scripts/maintenance/update-skill-policy.sh)
-- [`scripts/maintenance/git-memory.sh`](scripts/maintenance/git-memory.sh)
-- [`scripts/maintenance/nightly-maintenance.sh`](scripts/maintenance/nightly-maintenance.sh)
-- [`scripts/maintenance/install-nightly-maintenance.sh`](scripts/maintenance/install-nightly-maintenance.sh)
-- [`scripts/capture/extract-skill.sh`](scripts/capture/extract-skill.sh)
-- [`references/SKILL-TEMPLATE.md`](references/SKILL-TEMPLATE.md)
+- [`SKILL.md`](../SKILL.md)
+- [`scripts/shared/memory-paths.sh`](../scripts/shared/memory-paths.sh)
+- [`scripts/capture/log-memory.sh`](../scripts/capture/log-memory.sh)
+- [`scripts/recall/review-memory.sh`](../scripts/recall/review-memory.sh)
+- [`scripts/maintenance/organize-memory.sh`](../scripts/maintenance/organize-memory.sh)
+- [`scripts/maintenance/writeback-memory.sh`](../scripts/maintenance/writeback-memory.sh)
+- [`scripts/maintenance/update-skill-policy.sh`](../scripts/maintenance/update-skill-policy.sh)
+- [`scripts/maintenance/git-memory.sh`](../scripts/maintenance/git-memory.sh)
+- [`scripts/maintenance/nightly-maintenance.sh`](../scripts/maintenance/nightly-maintenance.sh)
+- [`scripts/maintenance/install-nightly-maintenance.sh`](../scripts/maintenance/install-nightly-maintenance.sh)
+- [`scripts/capture/extract-skill.sh`](../scripts/capture/extract-skill.sh)
+- [`references/SKILL-TEMPLATE.md`](../references/SKILL-TEMPLATE.md)
