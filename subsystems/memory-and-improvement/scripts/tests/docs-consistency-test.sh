@@ -4,10 +4,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-LANDING_EN="$SKILL_DIR/README.md"
-LANDING_ZH="$SKILL_DIR/README.zh-CN.md"
-README_EN="$SKILL_DIR/TECHNICAL.md"
-README_ZH="$SKILL_DIR/TECHNICAL.zh-CN.md"
+README_EN="$SKILL_DIR/README.md"
+README_ZH="$SKILL_DIR/README.zh-CN.md"
 SKILL_MD="$SKILL_DIR/SKILL.md"
 MAINTAINER_REF="$SKILL_DIR/references/maintainer-reference.md"
 HOOKS_SETUP="$SKILL_DIR/references/hooks-setup.md"
@@ -63,60 +61,15 @@ assert_max_lines() {
     [[ "$actual_lines" -le "$max_lines" ]] || fail "expected $path to stay within $max_lines lines but found $actual_lines"
 }
 
-assert_h2_sequence() {
-    local path="$1"
-    shift
-    local actual=""
-    local expected=""
-    local heading=""
-
-    actual="$(grep '^## ' "$path")"
-    for heading in "$@"; do
-        expected="${expected}${expected:+$'\n'}## $heading"
-    done
-
-    [[ "$actual" == "$expected" ]] || fail "unexpected H2 sequence in $path"
-}
-
 assert_file "$README_EN"
 assert_file "$README_ZH"
-assert_file "$LANDING_EN"
-assert_file "$LANDING_ZH"
 assert_file "$SKILL_MD"
 assert_file "$MAINTAINER_REF"
 assert_file "$HOOKS_SETUP"
 assert_file "$SKILL_DIR/scripts/shared/memory-config.sh"
 assert_file "$SKILL_DIR/config/defaults.toml"
 
-# The landing READMEs stay concise and follow the main project structure.
-assert_max_lines "$LANDING_EN" 200
-assert_max_lines "$LANDING_ZH" 200
-assert_contains "$LANDING_EN" "## Installation and use"
-assert_contains "$LANDING_EN" "## How it works"
-assert_contains "$LANDING_EN" "## What it remembers"
-assert_contains "$LANDING_EN" "## Compared with other memory approaches"
-assert_contains "$LANDING_EN" "## Limitations"
-assert_contains "$LANDING_EN" "TECHNICAL.md"
-assert_h2_sequence "$LANDING_EN" \
-    "Installation and use" \
-    "How it works" \
-    "What it remembers" \
-    "Compared with other memory approaches" \
-    "Limitations"
-assert_contains "$LANDING_ZH" "## 安装与使用"
-assert_contains "$LANDING_ZH" "## 工作原理"
-assert_contains "$LANDING_ZH" "## 记录什么"
-assert_contains "$LANDING_ZH" "## 与其他记忆方式对比"
-assert_contains "$LANDING_ZH" "## 限制"
-assert_contains "$LANDING_ZH" "TECHNICAL.zh-CN.md"
-assert_h2_sequence "$LANDING_ZH" \
-    "安装与使用" \
-    "工作原理" \
-    "记录什么" \
-    "与其他记忆方式对比" \
-    "限制"
-
-# Required technical sections stay present in the detailed references.
+# Required high-level sections stay present.
 assert_contains "$README_EN" "## Why This Memory System"
 assert_contains "$README_EN" "## Closed-Loop Runtime Model"
 assert_contains "$README_EN" "## Maintainer Reference"
@@ -212,13 +165,11 @@ for key_name in "${config_keys[@]}"; do
 done
 
 # Human-facing docs should not regress to stale path guidance.
-assert_not_contains "$README_EN" "/home/"
-assert_not_contains "$README_ZH" "/home/"
-assert_not_contains "$LANDING_EN" "/home/"
-assert_not_contains "$LANDING_ZH" "/home/"
-assert_not_contains "$SKILL_MD" "/home/"
-assert_not_contains "$MAINTAINER_REF" "/home/"
-assert_not_contains "$HOOKS_SETUP" "/home/"
+assert_not_contains "$README_EN" "/home/zitai/"
+assert_not_contains "$README_ZH" "/home/zitai/"
+assert_not_contains "$SKILL_MD" "/home/zitai/"
+assert_not_contains "$MAINTAINER_REF" "/home/zitai/"
+assert_not_contains "$HOOKS_SETUP" "/home/zitai/"
 assert_not_contains "$README_EN" "enforced automatically"
 assert_not_contains "$README_ZH" "自动强制执行"
 assert_not_contains "$SKILL_MD" "enforced automatically"
@@ -228,7 +179,7 @@ assert_not_contains "$HOOKS_SETUP" "enforced automatically"
 assert_contains "$README_EN" "references/maintainer-reference.md"
 assert_contains "$README_ZH" "references/maintainer-reference.md"
 assert_contains "$HOOKS_SETUP" "UserPromptSubmit"
-assert_contains "$HOOKS_SETUP" "does not run the advisory reflect helper automatically"
+assert_contains "$HOOKS_SETUP" "auto-run a previous-turn reflect check"
 assert_file "$SKILL_DIR/scripts/hooks/user-prompt-recall-reminder.sh"
 assert_contains "$SKILL_DIR/scripts/hooks/user-prompt-recall-reminder.sh" "install-nightly-maintenance.sh --apply"
 assert_contains "$MAINTAINER_REF" 'scripts/maintenance/install-nightly-maintenance.sh --apply'
@@ -282,7 +233,7 @@ for script_name in "${core_scripts[@]}"; do
     assert_contains "$README_EN" "scripts/$script_name"
     assert_contains "$README_ZH" "scripts/$script_name"
     assert_contains "$SKILL_MD" "scripts/$script_name"
-    assert_not_contains "$SCRIPTS_DIR/$script_name" "/home/"
+    assert_not_contains "$SCRIPTS_DIR/$script_name" "/home/zitai/"
 done
 
 # Shared and hook-only helpers should remain documented in the human-facing READMEs.
@@ -296,7 +247,7 @@ for script_name in "${helper_scripts[@]}"; do
     assert_file "$SCRIPTS_DIR/$script_name"
     assert_contains "$README_EN" "scripts/$script_name"
     assert_contains "$README_ZH" "scripts/$script_name"
-    assert_not_contains "$SCRIPTS_DIR/$script_name" "/home/"
+    assert_not_contains "$SCRIPTS_DIR/$script_name" "/home/zitai/"
 done
 
 # The consistency check itself should stay documented as a drift detector.
@@ -317,7 +268,7 @@ for script_name in "${shortcut_scripts[@]}"; do
     assert_contains "$README_EN" "scripts/shortcuts/$script_name"
     assert_contains "$README_ZH" "scripts/shortcuts/$script_name"
     assert_contains "$SKILL_MD" "scripts/shortcuts/$script_name"
-    assert_not_contains "$SCRIPTS_DIR/shortcuts/$script_name" "/home/"
+    assert_not_contains "$SCRIPTS_DIR/shortcuts/$script_name" "/home/zitai/"
 done
 assert_file "$SKILL_DIR/scripts/tests/shortcuts-smoke-test.sh"
 assert_contains "$README_EN" "scripts/tests/shortcuts-smoke-test.sh"

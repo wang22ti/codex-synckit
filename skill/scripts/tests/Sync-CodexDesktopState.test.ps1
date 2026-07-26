@@ -96,10 +96,22 @@ exit /b %exitCode%
     $expectedManagedVbs = @'
 Set fso = CreateObject("Scripting.FileSystemObject")
 Set shell = CreateObject("WScript.Shell")
+If WScript.Arguments.Named.Exists("CompileTest") Then WScript.Quit 0
 root = fso.GetParentFolderName(WScript.ScriptFullName)
 script = root & "\skills\codex-skills\codexkit-sync\scripts\Start-CodexWithSync.ps1"
-command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File " & Chr(34) & script & Chr(34)
-shell.Run command, 0, False
+stateDir = shell.ExpandEnvironmentStrings("%USERPROFILE%") & "\.local\state\codexkit"
+If Not fso.FolderExists(stateDir) Then fso.CreateFolder(stateDir)
+logPath = stateDir & "\managed-launch-last.log"
+visibleLauncher = root & "\Start-CodexManaged.cmd"
+inner = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File " & Chr(34) & script & Chr(34) & " > " & Chr(34) & logPath & Chr(34) & " 2>&1"
+command = "cmd.exe /d /s /c " & Chr(34) & inner & Chr(34)
+exitCode = shell.Run(command, 0, True)
+If exitCode <> 0 Then
+    message = "ChatGPT Managed startup failed (exit code " & exitCode & ")." & vbCrLf & vbCrLf & _
+        "Log: " & logPath & vbCrLf & _
+        "Run this launcher for visible diagnostics:" & vbCrLf & visibleLauncher
+    shell.Popup message, 0, "CodexKit managed startup failed", 16
+End If
 '@
     if (-not $isPublicSourceTree) {
         $managedCmdText = Normalize-Text (Get-Content -LiteralPath (Join-Path $sourceKitRoot "Start-CodexManaged.cmd") -Raw -Encoding UTF8)
@@ -111,8 +123,8 @@ shell.Run command, 0, False
     $normalizedExporter = Normalize-Text $exporterText
     Assert-True ($normalizedExporter.Contains((Normalize-Text $expectedManagedCmd))) "Exporter CMD template differs from the root Managed launcher"
     Assert-True ($normalizedExporter.Contains((Normalize-Text $expectedManagedVbs))) "Exporter VBS template differs from the root Managed launcher"
-    Assert-True ($exporterText.Contains('Write-TextFileSafe -Destination (Join-Path $script:DestinationRoot "Start-CodexManaged.cmd")')) "Exporter does not generate the Managed CMD launcher"
-    Assert-True ($exporterText.Contains('Write-TextFileSafe -Destination (Join-Path $script:DestinationRoot "Start-CodexManaged.vbs")')) "Exporter does not generate the Managed VBS launcher"
+    Assert-True ($exporterText.Contains('Write-TextFileSafe -Destination (Join-Path $script:DestinationRoot "Start-CodexManaged.cmd") -Content $managed -Category "generated" -NoBom')) "Exporter does not generate the Managed CMD launcher without a UTF-8 BOM"
+    Assert-True ($exporterText.Contains('Write-TextFileSafe -Destination (Join-Path $script:DestinationRoot "Start-CodexManaged.vbs") -Content $managedVbs -Category "generated" -NoBom')) "Exporter does not generate the Managed VBS launcher without a UTF-8 BOM"
     Assert-True (-not $exporterText.Contains('Write-TextFileSafe -Destination (Join-Path $script:DestinationRoot "Start-CodexResident.cmd")')) "Exporter still generates the Resident launcher"
     Assert-True (-not $exporterText.Contains('Write-TextFileSafe -Destination (Join-Path $script:DestinationRoot "Start-CodexSynced.cmd")')) "Exporter still generates the Synced launcher"
 
@@ -140,15 +152,17 @@ shell.Run command, 0, False
     $catalogArchived = Join-Path $catalog.Kit "session-data\archived_sessions"
     New-Item -ItemType Directory -Force -Path $catalogSessions,$catalogArchived | Out-Null
     $catalogRollout = Join-Path $catalogSessions "rollout-2026-07-21T00-00-00-$catalogTask.jsonl"
-    $catalogMeta = [ordered]@{ timestamp = "2026-07-21T00:00:00Z"; type = "session_meta"; payload = [ordered]@{ id = $catalogTask; session_id = $catalogTask; timestamp = "2026-07-21T00:00:00Z"; cwd = "C:\workspace"; source = "vscode"; thread_source = "user"; model_provider = "openai"; cli_version = "test" } }
-    [IO.File]::WriteAllText($catalogRollout, (($catalogMeta | ConvertTo-Json -Depth 10 -Compress) + "`n"), (New-Object Text.UTF8Encoding($false)))
-    $catalogIndex = [ordered]@{ id = $catalogTask; thread_name = "Catalog imported task"; updated_at = "2026-07-21T00:00:00Z" }
+    $catalogMeta = [ordered]@{ timestamp = "2026-07-21T00:00:00Z"; type = "session_meta"; payload = [ordered]@{ id = $catalogTask; session_id = $catalogTask; timestamp = "2026-07-21T00:00:00Z"; cwd = "C:\workspace"; source = "vscode"; thread_source = "automation"; model_provider = "openai"; cli_version = "test" } }
+    $catalogAutomation = [ordered]@{ timestamp = "2026-07-21T00:00:01Z"; type = "response_item"; payload = [ordered]@{ type = "message"; role = "developer"; content = @([ordered]@{ type = "input_text"; text = "Automation ID: integration-monitor" }) } }
+    $catalogRows = @($catalogMeta,$catalogAutomation) | ForEach-Object { $_ | ConvertTo-Json -Depth 10 -Compress }
+    [IO.File]::WriteAllText($catalogRollout, (($catalogRows -join "`n") + "`n"), (New-Object Text.UTF8Encoding($false)))
+    $catalogIndex = [ordered]@{ id = $catalogTask; thread_name = "Catalog imported automation run"; updated_at = "2026-07-21T00:00:00Z" }
     [IO.File]::WriteAllText((Join-Path $catalog.Kit "session-data\session_index.jsonl"), (($catalogIndex | ConvertTo-Json -Compress) + "`n"), (New-Object Text.UTF8Encoding($false)))
     $catalogDb = Join-Path $catalog.Profile ".codex\state_5.sqlite"
     $createCatalogDb = @'
 const {DatabaseSync}=require('node:sqlite');
 const db=new DatabaseSync(process.argv[2]);
-db.exec("CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, source TEXT NOT NULL, model_provider TEXT NOT NULL, cwd TEXT NOT NULL, title TEXT NOT NULL, sandbox_policy TEXT NOT NULL, approval_mode TEXT NOT NULL, tokens_used INTEGER NOT NULL DEFAULT 0, has_user_event INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0, archived_at INTEGER, cli_version TEXT NOT NULL DEFAULT '', first_user_message TEXT NOT NULL DEFAULT '', memory_mode TEXT NOT NULL DEFAULT 'enabled', preview TEXT NOT NULL DEFAULT '', recency_at INTEGER NOT NULL DEFAULT 0, history_mode TEXT NOT NULL DEFAULT 'legacy')");
+db.exec("CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, source TEXT NOT NULL, model_provider TEXT NOT NULL, cwd TEXT NOT NULL, title TEXT NOT NULL, sandbox_policy TEXT NOT NULL, approval_mode TEXT NOT NULL, tokens_used INTEGER NOT NULL DEFAULT 0, has_user_event INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0, archived_at INTEGER, cli_version TEXT NOT NULL DEFAULT '', first_user_message TEXT NOT NULL DEFAULT '', memory_mode TEXT NOT NULL DEFAULT 'enabled', preview TEXT NOT NULL DEFAULT '', recency_at INTEGER NOT NULL DEFAULT 0, history_mode TEXT NOT NULL DEFAULT 'legacy', thread_source TEXT)");
 db.close();
 '@
     $createCatalogDbScript = Join-Path $catalog.Root "create-catalog-db.cjs"
@@ -159,9 +173,9 @@ db.close();
     $readCatalogDb = @'
 const {DatabaseSync}=require('node:sqlite');
 const db=new DatabaseSync(process.argv[2],{readOnly:true});
-const row=db.prepare('SELECT title FROM threads WHERE id=?').get(process.argv[3]);
+const row=db.prepare('SELECT title,thread_source FROM threads WHERE id=?').get(process.argv[3]);
 db.close();
-if(!row || row.title!=='Catalog imported task') process.exit(7);
+if(!row || row.title!=='Catalog imported automation run' || row.thread_source!=='automation') process.exit(7);
 '@
     $readCatalogDbScript = Join-Path $catalog.Root "read-catalog-db.cjs"
     [IO.File]::WriteAllText($readCatalogDbScript, $readCatalogDb, (New-Object Text.UTF8Encoding($false)))
@@ -169,6 +183,8 @@ if(!row || row.title!=='Catalog imported task') process.exit(7);
     Assert-True ($LASTEXITCODE -eq 0) "Pull did not register the shared task in state_5.sqlite"
     $catalogReceipt = Get-Content -LiteralPath (Join-Path $catalog.Profile ".local\state\codexkit\last-desktop-sync.json") -Raw | ConvertFrom-Json
     Assert-True ($catalogReceipt.thread_catalog_status -eq "reconciled" -and $catalogReceipt.thread_catalog_inserted_count -eq 1) "Pull receipt did not verify the repaired thread catalog"
+    Assert-True ($catalogReceipt.automation_history_rollouts -eq 1 -and $catalogReceipt.automation_history_cataloged -eq 1) "Pull receipt did not verify automation history coverage"
+    Assert-True ($catalogReceipt.automation_history_inserted_count -eq 1 -and $catalogReceipt.automation_history_unresolved_count -eq 0) "Pull receipt did not record the merged automation run"
     $oldProfile = $env:USERPROFILE
     $oldNode = $env:CODEXKIT_NODE_EXE
     $oldDesktop = $env:CODEX_DESKTOP_EXE

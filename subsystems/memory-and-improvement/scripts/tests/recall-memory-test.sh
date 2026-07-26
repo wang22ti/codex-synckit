@@ -131,7 +131,7 @@ cat <<'EOF' > "$GLOBAL_ROOT/namespaces/user-profile/SUMMARY.md"
 Load this file before opening `.learnings/` when you want the shortest useful summary for this namespace.
 
 Current high-priority facts:
-- Preferred name: Example.
+- Preferred name: Zitai.
 EOF
 
 cat <<'EOF' > "$GLOBAL_ROOT/namespaces/user-profile/ACADEMIC_PROFILE.md"
@@ -240,7 +240,7 @@ assert_contains "$global_output" "Resolved-Namespace: user-profile"
 assert_contains "$global_output" "Query: preferred name"
 assert_contains "$global_output" "<memory-review>"
 assert_contains "$global_output" "<memory-search>"
-assert_contains "$global_output" "Preferred name: Example."
+assert_contains "$global_output" "Preferred name: Zitai."
 
 deeper_output="$(bash "$RECALL_SCRIPT" --scope project --project-root "$PROJECT_ROOT" --deeper true)"
 assert_contains "$deeper_output" "Resolved-Scope: project"

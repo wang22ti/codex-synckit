@@ -32,6 +32,15 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Update pull failed." }
     Assert-True ((Get-Content -LiteralPath (Join-Path $local "shared.txt") -Raw) -match "remote update") "pull should install a one-sided remote update"
 
+    Set-Content -LiteralPath (Join-Path $local "deleted-on-both.txt") -Value "obsolete" -Encoding UTF8
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -Push -LocalRoot $local -SharedRoot $shared -BaselinePath $baseline
+    if ($LASTEXITCODE -ne 0) { throw "Double-delete setup push failed." }
+    Remove-Item -LiteralPath (Join-Path $local "deleted-on-both.txt") -Force
+    Remove-Item -LiteralPath (Join-Path $shared "deleted-on-both.txt") -Force
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -Pull -LocalRoot $local -SharedRoot $shared -BaselinePath $baseline
+    if ($LASTEXITCODE -ne 0) { throw "Double-delete pull failed." }
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $local "deleted-on-both.txt"))) "matching deletions should not conflict"
+
     Set-Content -LiteralPath (Join-Path $local "shared.txt") -Value "local conflict" -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $shared "shared.txt") -Value "remote conflict" -Encoding UTF8
     $previousPreference = $ErrorActionPreference
@@ -45,6 +54,13 @@ try {
     Assert-True ($conflictExitCode -ne 0) "two-sided edits should stop before overwrite"
     Assert-True ((Get-Content -LiteralPath (Join-Path $local "shared.txt") -Raw) -match "local conflict") "conflict must preserve local data"
     Assert-True ((Get-Content -LiteralPath (Join-Path $shared "shared.txt") -Raw) -match "remote conflict") "conflict must preserve shared data"
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -Pull -ConflictWinner Local -LocalRoot $local -SharedRoot $shared -BaselinePath $baseline
+    if ($LASTEXITCODE -ne 0) { throw "Explicit local-winner resolution failed." }
+    Assert-True ((Get-Content -LiteralPath (Join-Path $shared "shared.txt") -Raw) -match "local conflict") "local winner should publish the local version"
+    $quarantinedShared = @(Get-ChildItem -LiteralPath (Join-Path (Split-Path -Parent $baseline) "project-workspace-quarantine") -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -eq "shared.txt" -and $_.FullName -match '\\shared\\' })
+    Assert-True ($quarantinedShared.Count -eq 1) "replaced shared conflict version should be quarantined"
 
     Write-Host "[OK] project workspace directional sync tests passed" -ForegroundColor Green
 }

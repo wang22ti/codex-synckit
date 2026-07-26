@@ -30,6 +30,7 @@ $LocalStateRoot = Join-Path $env:USERPROFILE ".local\state\codexkit"
 $SyncReceipt = Join-Path $LocalStateRoot "last-desktop-sync.json"
 $QuarantineDir = Join-Path $LocalStateRoot "desktop-state-quarantine"
 $ConflictDir = Join-Path $LocalStateRoot "desktop-state-conflicts"
+$ThreadCatalogConflictDir = Join-Path $LocalStateRoot "thread-catalog-conflicts"
 
 function Ensure-Dir($Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
@@ -171,6 +172,24 @@ function Show-StateStatus {
         }
     }
     $rows | Format-Table -AutoSize
+
+    if (Test-Path -LiteralPath $SyncReceipt -PathType Leaf) {
+        try {
+            $receipt = Get-Content -LiteralPath $SyncReceipt -Raw -Encoding UTF8 | ConvertFrom-Json
+            Write-Host ("Automation history: {0}/{1} cataloged; inserted {2}; stale paths repaired {3}; conflicts {4}; unresolved {5}; corrupt duplicate copies ignored {6}" -f
+                [int]$receipt.automation_history_cataloged,
+                [int]$receipt.automation_history_rollouts,
+                [int]$receipt.automation_history_inserted_count,
+                [int]$receipt.automation_history_path_repaired_count,
+                [int]$receipt.automation_history_conflict_count,
+                [int]$receipt.automation_history_unresolved_count,
+                [int]$receipt.thread_catalog_corrupt_rollout_copy_count) -ForegroundColor DarkCyan
+        } catch {
+            Write-Host "Automation history receipt: unreadable ($($_.Exception.Message))" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "Automation history receipt: missing (run a Managed Pull while ChatGPT is closed)" -ForegroundColor Yellow
+    }
 
     if (-not (Test-Path -LiteralPath $RunningMarker -PathType Leaf)) {
         Write-Host "Running marker: missing (it will be created by the next managed launch)" -ForegroundColor Yellow
@@ -407,7 +426,18 @@ function Repair-ThreadCatalog {
     }
     if (-not (Test-Path -LiteralPath $ThreadCatalogDatabase -PathType Leaf)) {
         Write-Host "Local thread catalog does not exist yet; Codex will create it on first launch." -ForegroundColor Yellow
-        return [pscustomobject]@{ status = "database-missing"; inserted_count = 0; unresolved_count = 0 }
+        return [pscustomobject]@{
+            status = "database-missing"
+            inserted_count = 0
+            unresolved_count = 0
+            rollout_conflict_count = 0
+            automation_history_rollouts = 0
+            automation_history_cataloged = 0
+            automation_history_inserted_count = 0
+            automation_history_path_repaired_count = 0
+            automation_history_unresolved_count = 0
+            corrupt_rollout_copy_count = 0
+        }
     }
     foreach ($requiredPath in @($SessionsRoot, $ArchivedSessionsRoot)) {
         if (-not (Test-Path -LiteralPath $requiredPath -PathType Container)) {
@@ -430,15 +460,41 @@ function Repair-ThreadCatalog {
             --archived-root $ArchivedSessionsRoot `
             --session-index $SessionIndex `
             --report-output $reportPath)
-        if ($LASTEXITCODE -ne 0) { throw "Thread catalog repair helper returned exit code $LASTEXITCODE." }
+        if ($LASTEXITCODE -ne 0) {
+            if (Test-Path -LiteralPath $reportPath -PathType Leaf) {
+                Ensure-Dir $ThreadCatalogConflictDir
+                $conflictReport = Join-Path $ThreadCatalogConflictDir "thread-catalog-conflict.$(Get-Date -Format yyyyMMdd-HHmmssfff).json"
+                Copy-Item -LiteralPath $reportPath -Destination $conflictReport -Force
+                throw "Thread catalog repair helper returned exit code $LASTEXITCODE. Conflict report: $conflictReport"
+            }
+            throw "Thread catalog repair helper returned exit code $LASTEXITCODE."
+        }
         foreach ($line in $nodeOutput) { Write-Host $line -ForegroundColor DarkGreen }
         Assert-InputUnchanged -Path $SessionIndex -ExpectedHash $sessionIndexInputHash -Label "Session title index used for thread catalog repair"
         if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf)) {
             throw "Thread catalog repair helper did not produce its verification report."
         }
         $report = Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ([int]$report.corrupt_rollout_copy_count -gt 0) {
+            Ensure-Dir $ThreadCatalogConflictDir
+            $warningReport = Join-Path $ThreadCatalogConflictDir "thread-catalog-warning.$(Get-Date -Format yyyyMMdd-HHmmssfff).json"
+            Copy-Item -LiteralPath $reportPath -Destination $warningReport -Force
+            $retainedWarnings = @(Get-ChildItem -LiteralPath $ThreadCatalogConflictDir -File -Filter "thread-catalog-warning.*.json" |
+                Sort-Object LastWriteTime -Descending)
+            foreach ($expired in @($retainedWarnings | Select-Object -Skip 2)) {
+                try { Remove-Item -LiteralPath $expired.FullName -Force }
+                catch { Write-Warning "Could not remove expired thread-catalog warning $($expired.FullName): $($_.Exception.Message)" }
+            }
+            Write-Warning "Ignored $($report.corrupt_rollout_copy_count) corrupt duplicate rollout copy/copies because a valid copy exists. Diagnostic: $warningReport"
+        }
         if ([int]$report.unresolved_count -ne 0) {
             throw "Thread catalog verification found $($report.unresolved_count) unresolved task(s)."
+        }
+        if ([int]$report.rollout_conflict_count -ne 0) {
+            throw "Thread catalog verification found $($report.rollout_conflict_count) divergent rollout copy/copies."
+        }
+        if ([int]$report.automation_history_unresolved_count -ne 0) {
+            throw "Automation history verification found $($report.automation_history_unresolved_count) unresolved run(s)."
         }
         Add-Member -InputObject $report -NotePropertyName status -NotePropertyValue "reconciled" -Force
         return $report
@@ -452,7 +508,7 @@ function Repair-ThreadCatalog {
 function Write-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$Mode, $ThreadCatalogReport) {
     Ensure-Dir $LocalStateRoot
     $payload = [ordered]@{
-        schema_version = 1
+        schema_version = 2
         device = [string]$env:COMPUTERNAME
         mode = $Mode
         completed_at = [DateTimeOffset]::UtcNow.ToString("o")
@@ -462,6 +518,13 @@ function Write-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$Mode, 
         thread_catalog_status = if ($ThreadCatalogReport) { [string]$ThreadCatalogReport.status } else { "not-requested" }
         thread_catalog_inserted_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.inserted_count } else { 0 }
         thread_catalog_unresolved_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.unresolved_count } else { 0 }
+        automation_history_rollouts = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_history_rollouts } else { 0 }
+        automation_history_cataloged = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_history_cataloged } else { 0 }
+        automation_history_inserted_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_history_inserted_count } else { 0 }
+        automation_history_path_repaired_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_history_path_repaired_count } else { 0 }
+        automation_history_conflict_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.rollout_conflict_count } else { 0 }
+        automation_history_unresolved_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_history_unresolved_count } else { 0 }
+        thread_catalog_corrupt_rollout_copy_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.corrupt_rollout_copy_count } else { 0 }
         thread_catalog_database_sha256 = Get-FullHashOrMissing $ThreadCatalogDatabase
         organization_sha256 = (Get-FileHash -LiteralPath $BaseState -Algorithm SHA256).Hash
         local_state_sha256 = (Get-FileHash -LiteralPath $LocalState -Algorithm SHA256).Hash

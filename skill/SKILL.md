@@ -71,6 +71,11 @@ same relative file on both sides stop before mutation and write a device-local
 conflict report. Replaced or deleted destination files move to a device-local
 quarantine first.
 
+Managed Push/Pull resolves genuine project-workspace conflicts interactively:
+Yes keeps this computer's versions, No keeps OneDrive versions, and Cancel
+leaves both sides unchanged. Every replaced version is quarantined before the
+selected winner is installed and the directional sync is retried.
+
 The optional automation redirect uses `CodexKit\automations` as the shared
 source and `%USERPROFILE%\.codex\automations` as the link target. It is not part
 of `-Recommended`. Fully close ChatGPT, then migrate each machine's existing
@@ -249,6 +254,19 @@ Desktop sidebar organization remains editable on every machine. Pull/Push transf
 The controlled sync also validates `session-data\session_index.jsonl`. When no other device has a fresh running heartbeat, remove duplicate rows by task ID and retain the row with the newest `updated_at` value (last row wins ties). Abort without changing the index on malformed JSON, retain one rollback copy under `%USERPROFILE%\.local\state\codexkit\session-index-backups`, and defer repair whenever another device is active.
 
 Task visibility also depends on the device-local `%USERPROFILE%\.codex\state_5.sqlite` `threads` catalog; linked rollout files and `session_index.jsonl` alone do not guarantee that another desktop app lists a task. Before a managed Pull launches ChatGPT, run `Repair-CodexThreadCatalog.mjs` while the app is closed. It transactionally registers only missing top-level tasks that have both a shared title-index row and a shared rollout file, preserves every existing database row, ignores legacy child-rollout aliases whose filename ID differs from the canonical `session_id`, runs SQLite integrity and post-insert checks, and checkpoints the WAL before the launch receipt is hashed. Never copy or live-link `state_5.sqlite` between machines.
+
+Automation history uses the same shared rollout union rather than a shared
+SQLite database. Independent runs from different machines have different
+thread IDs and must all survive. When duplicate rollout files carry the same
+thread ID, identical copies are redundant and a strict prefix may yield to its
+complete extension; two valid divergent transcripts are a conflict and must
+stop before any local catalog mutation. A corrupt OneDrive conflict copy may
+be ignored only when another valid copy of that same thread exists, with a
+device-local diagnostic retained. Managed Pull extracts `Automation ID`,
+registers every indexed automation run, repairs only missing/stale local
+automation rollout paths, and records automation coverage, insertions, path
+repairs, corrupt copies, conflicts, and unresolved runs in the launch receipt.
+Do not concatenate divergent JSONL suffixes or silently choose a branch.
 
 The desktop launcher must discover packaged builds from their Appx manifest and the registered `codex` protocol instead of assuming a fixed executable name. Current builds may retain the `OpenAI.Codex` package identity while declaring `app\ChatGPT.exe` as the desktop entry point; older builds used `Codex.exe`. Process monitoring must follow the resolved manifest executable and must exclude the bundled CLI at `app\resources\codex.exe`.
 
