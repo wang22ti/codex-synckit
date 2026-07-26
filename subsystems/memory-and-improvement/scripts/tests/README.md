@@ -7,16 +7,17 @@ This directory contains the regression and smoke tests for the `memory-and-impro
 Run one test:
 
 ```bash
-bash scripts/tests/search-memory-test.sh
+bash /home/zitai/.codex/skills/memory-and-improvement/scripts/tests/search-memory-test.sh
 ```
 
 Run the full suite:
 
 ```bash
-bash ./tools/Test-MemorySubsystem.sh
+for test_script in /home/zitai/.codex/skills/memory-and-improvement/scripts/tests/*.sh; do
+  printf '=== %s ===\n' "${test_script##*/}"
+  bash "$test_script" || exit 1
+done
 ```
-
-Run the command above from the Codex SyncKit repository root.
 
 On Windows with Git for Windows installed, also run:
 

@@ -27,7 +27,9 @@ self_improving_trim_trailing_slash() {
 }
 
 self_improving_has_ripgrep() {
-    command -v rg >/dev/null 2>&1
+    local candidate
+    candidate="$(command -v rg 2>/dev/null || true)"
+    [[ -n "$candidate" ]] && "$candidate" --version >/dev/null 2>&1
 }
 
 self_improving_extract_matches() {
@@ -270,11 +272,13 @@ self_improving_maintenance_schedule_interval_minutes_default="$self_improving_co
 self_improving_skill_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 self_improving_legacy_project_registry_file="$self_improving_state_root/project-memory-registry.txt"
 self_improving_codexkit_root=""
+self_improving_skill_parent="${self_improving_skill_dir%/*}"
+self_improving_skill_grandparent="${self_improving_skill_parent%/*}"
 if [[ -n "${SELF_IMPROVING_CODEXKIT_ROOT:-}" ]]; then
     self_improving_codexkit_root="$(self_improving_normalize_path "$SELF_IMPROVING_CODEXKIT_ROOT")"
-elif [[ "$(basename "$(dirname "$self_improving_skill_dir")")" == "codex-skills" &&
-        "$(basename "$(dirname "$(dirname "$self_improving_skill_dir")")")" == "skills" ]]; then
-    self_improving_codexkit_root="$(dirname "$(dirname "$(dirname "$self_improving_skill_dir")")")"
+elif [[ "${self_improving_skill_parent##*/}" == "codex-skills" &&
+        "${self_improving_skill_grandparent##*/}" == "skills" ]]; then
+    self_improving_codexkit_root="${self_improving_skill_grandparent%/*}"
 fi
 if [[ -n "${SELF_IMPROVING_PROJECT_REGISTRY_FILE:-}" ]]; then
     self_improving_project_registry_file="$(self_improving_normalize_path "$SELF_IMPROVING_PROJECT_REGISTRY_FILE")"
@@ -294,9 +298,16 @@ self_improving_skill_markdown_template="$(awk '
 ' "$self_improving_skill_dir/references/SKILL-TEMPLATE.md" 2>/dev/null)"
 
 self_improving_current_device_id() {
-    local value="${COMPUTERNAME:-${HOSTNAME:-}}"
-    if [[ -z "$value" ]] && command -v hostname >/dev/null 2>&1; then
+    local value=""
+    if [[ -n "${SELF_IMPROVING_DEVICE_ID:-}" ]]; then
+        value="$SELF_IMPROVING_DEVICE_ID"
+    elif [[ -n "${COMPUTERNAME:-}" ]]; then
+        value="$COMPUTERNAME"
+    elif command -v hostname >/dev/null 2>&1; then
         value="$(hostname 2>/dev/null || true)"
+    fi
+    if [[ -z "$value" ]]; then
+        value="${HOSTNAME:-}"
     fi
     value="${value//$'\t'/ }"
     value="${value//$'\r'/}"
@@ -343,6 +354,9 @@ self_improving_registry_record_for_path() {
     done < <(self_improving_list_onedrive_roots)
 
     device="$(self_improving_current_device_id)"
+    if command -v cygpath >/dev/null 2>&1 && [[ "$memory_dir" == /[A-Za-z]/* ]]; then
+        memory_dir="$(cygpath -w "$memory_dir" 2>/dev/null || printf '%s' "$memory_dir")"
+    fi
     printf 'local\t%s\t%s\n' "$device" "$memory_dir"
 }
 
@@ -355,6 +369,9 @@ self_improving_registry_resolve_record() {
     case "$storage" in
         local)
             [[ "$device" == "$(self_improving_current_device_id)" ]] || return 0
+            if command -v cygpath >/dev/null 2>&1; then
+                stored_path="$(cygpath -u "$stored_path" 2>/dev/null || printf '%s' "$stored_path")"
+            fi
             printf '%s\n' "$(self_improving_normalize_path "$stored_path")"
             ;;
         onedrive)
@@ -385,7 +402,15 @@ self_improving_registry_collect_records() {
         if [[ "$line" == *$'\t'* ]]; then
             IFS=$'\t' read -r storage device stored_path <<< "$line"
             case "$storage" in
-                local|onedrive)
+                local)
+                    if [[ -n "$stored_path" ]] &&
+                       command -v cygpath >/dev/null 2>&1 &&
+                       [[ "$stored_path" == /[A-Za-z]/* ]]; then
+                        stored_path="$(cygpath -w "$stored_path" 2>/dev/null || printf '%s' "$stored_path")"
+                    fi
+                    [[ -n "$stored_path" ]] && printf '%s\t%s\t%s\n' "$storage" "$device" "$stored_path"
+                    ;;
+                onedrive)
                     [[ -n "$stored_path" ]] && printf '%s\t%s\t%s\n' "$storage" "$device" "$stored_path"
                     ;;
             esac
@@ -459,8 +484,18 @@ self_improving_register_project_memory_dir() {
                 break
             fi
         done
-        if [[ "$already_registered" == true && ! -f "$legacy_file" && ${#source_files[@]} -le 1 ]]; then
-            exit 0
+        if [[ "$already_registered" == true &&
+              ! -f "$legacy_file" &&
+              ${#source_files[@]} -le 1 ]] &&
+           grep -Fqx -- "$new_record" "$file" 2>/dev/null; then
+            local unique_record_count=""
+            unique_record_count="$(
+                printf '%s\n' "${records[@]}" |
+                    awk 'NF && !seen[$0]++ { count++ } END { print count + 0 }'
+            )"
+            if [[ "$unique_record_count" -eq "${#records[@]}" ]]; then
+                exit 0
+            fi
         fi
 
         temp_file="$(mktemp "${TMPDIR:-/tmp}/project-memory-registry.XXXXXX")"

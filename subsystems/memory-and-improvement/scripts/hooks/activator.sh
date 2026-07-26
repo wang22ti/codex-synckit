@@ -300,8 +300,9 @@ read_hook_input
 hook_event_name="$(extract_hook_field "hook_event_name")"
 
 if [[ "$hook_event_name" == "SessionStart" ]]; then
-    # Keep SessionStart fail-open and fast on Windows. Project memory init/registry
-    # can be done by normal memory commands; the hook should only inject guidance.
+    # Structural initialization is deterministic and remains fail-open. It does
+    # not create substantive memory content or make routing decisions.
+    ensure_project_memory_initialized || true
     render_session_memory_guide || true
     exit 0
 fi

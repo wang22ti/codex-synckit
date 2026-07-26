@@ -25,6 +25,10 @@ machines:
 - **🧰 Your capabilities travel too:** Reusable Codex skills are synchronized,
   including skills for creating flowcharts, architecture diagrams, and other
   illustrations, so a new PC does not require rebuilding the whole workflow.
+- **🧠 Local Memory Observatory:** The bundled
+  [`dashboard`](dashboard/README.md) audits registered project memories,
+  sidebar coverage, global namespaces, maintenance health, and controlled
+  discovery without uploading private memory to an external service.
 
 ## Installation and use
 

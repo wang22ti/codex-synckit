@@ -7,6 +7,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+$env:CODEXKIT_INTERACTIVE_CONFLICTS = "1"
 
 $ScriptRoot = $PSScriptRoot
 $KitRoot = (Resolve-Path -LiteralPath (Join-Path $ScriptRoot "..\..\..\..")).Path
@@ -77,7 +78,13 @@ function Invoke-ProjectWorkspaceSync([ValidateSet("Pull", "Push")][string]$Mode)
     if (-not (Test-Path -LiteralPath $ProjectWorkspaceScript -PathType Leaf)) {
         throw "Missing project workspace sync helper: $ProjectWorkspaceScript"
     }
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ProjectWorkspaceScript "-$Mode"
+    $previousInteractive = $env:CODEXKIT_INTERACTIVE_CONFLICTS
+    try {
+        $env:CODEXKIT_INTERACTIVE_CONFLICTS = "1"
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ProjectWorkspaceScript "-$Mode"
+    } finally {
+        $env:CODEXKIT_INTERACTIVE_CONFLICTS = $previousInteractive
+    }
 }
 
 if (-not (Test-Path -LiteralPath $DesktopStateScript -PathType Leaf)) {

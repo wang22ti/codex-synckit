@@ -65,15 +65,20 @@ git -C "$PROJECT_ROOT" init >/dev/null 2>&1
 
 env \
     SELF_IMPROVING_PROJECT_ROOT="$PROJECT_ROOT" \
+    SELF_IMPROVING_PROJECT_REGISTRY_FILE="$STATE_ROOT/project-memory-registry.tsv" \
     XDG_STATE_HOME="$STATE_ROOT" \
     bash "$ACTIVATOR" <<'EOF' >/dev/null
 {"hook_event_name":"SessionStart"}
 EOF
 
-if [[ -d "$PROJECT_ROOT/.learnings" ]]; then
-    printf 'Expected fail-open SessionStart not to initialize %s\n' "$PROJECT_ROOT/.learnings" >&2
+if [[ ! -d "$PROJECT_ROOT/.learnings" ]]; then
+    printf 'Expected SessionStart to initialize %s\n' "$PROJECT_ROOT/.learnings" >&2
     exit 1
 fi
+
+assert_exists "$PROJECT_ROOT/.learnings/SUMMARY.md"
+assert_exists "$PROJECT_ROOT/.learnings/LEARNINGS.md"
+assert_exists "$PROJECT_ROOT/.learnings/assets/INDEX.md"
 
 NON_REPO_ROOT="$TMP_ROOT/non-repo"
 NON_REPO_STATE_ROOT="$TMP_ROOT/non-repo-state"
@@ -81,6 +86,7 @@ mkdir -p "$NON_REPO_ROOT" "$NON_REPO_STATE_ROOT"
 
 env \
     SELF_IMPROVING_PROJECT_ROOT="$NON_REPO_ROOT" \
+    SELF_IMPROVING_PROJECT_REGISTRY_FILE="$NON_REPO_STATE_ROOT/project-memory-registry.tsv" \
     XDG_STATE_HOME="$NON_REPO_STATE_ROOT" \
     bash "$ACTIVATOR" <<'EOF' >/dev/null
 {"hook_event_name":"SessionStart"}
@@ -91,28 +97,34 @@ if [[ -d "$NON_REPO_ROOT/.learnings" ]]; then
     exit 1
 fi
 
-READ_ONLY_ROOT="$TMP_ROOT/read-only-project"
-READ_ONLY_STATE_ROOT="$TMP_ROOT/read-only-state"
-mkdir -p "$READ_ONLY_ROOT" "$READ_ONLY_STATE_ROOT"
-git -C "$READ_ONLY_ROOT" init >/dev/null 2>&1
-chmod 0555 "$READ_ONLY_ROOT"
+case "$(uname -s)" in
+MINGW*|MSYS*|CYGWIN*) ;;
+*)
+    READ_ONLY_ROOT="$TMP_ROOT/read-only-project"
+    READ_ONLY_STATE_ROOT="$TMP_ROOT/read-only-state"
+    mkdir -p "$READ_ONLY_ROOT" "$READ_ONLY_STATE_ROOT"
+    git -C "$READ_ONLY_ROOT" init >/dev/null 2>&1
+    chmod 0555 "$READ_ONLY_ROOT"
 
-read_only_output="$(
-    env \
+    read_only_output="$(
+        env \
         SELF_IMPROVING_PROJECT_ROOT="$READ_ONLY_ROOT" \
+        SELF_IMPROVING_PROJECT_REGISTRY_FILE="$READ_ONLY_STATE_ROOT/project-memory-registry.tsv" \
         XDG_STATE_HOME="$READ_ONLY_STATE_ROOT" \
-        bash "$ACTIVATOR" <<'EOF'
+            bash "$ACTIVATOR" <<'EOF'
 {"hook_event_name":"SessionStart"}
 EOF
-)"
+    )"
 
-chmod 0755 "$READ_ONLY_ROOT"
+    chmod 0755 "$READ_ONLY_ROOT"
 
-assert_contains "$read_only_output" "<memory-session-guide>"
-if [[ -d "$READ_ONLY_ROOT/.learnings" ]]; then
-    printf 'Expected read-only SessionStart not to initialize %s\n' "$READ_ONLY_ROOT/.learnings" >&2
-    exit 1
-fi
+    assert_contains "$read_only_output" "<memory-session-guide>"
+    if [[ -d "$READ_ONLY_ROOT/.learnings" ]]; then
+        printf 'Expected read-only SessionStart not to initialize %s\n' "$READ_ONLY_ROOT/.learnings" >&2
+        exit 1
+    fi
+    ;;
+esac
 
 assert_contains "$output" "<memory-session-guide>"
 assert_contains "$minimal_path_output" "<memory-session-guide>"

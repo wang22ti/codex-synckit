@@ -4,6 +4,8 @@ param(
     [switch]$Pull,
     [switch]$Push,
     [switch]$Status,
+    [ValidateSet("", "Local", "Shared")]
+    [string]$ConflictWinner = "",
     [string]$LocalRoot,
     [string]$SharedRoot,
     [string]$BaselinePath
@@ -78,6 +80,7 @@ function Read-Baseline {
 }
 
 function Test-Same($EntryA, $EntryB) {
+    if ($null -eq $EntryA -and $null -eq $EntryB) { return $true }
     return $null -ne $EntryA -and $null -ne $EntryB -and
         [string]$EntryA.hash -eq [string]$EntryB.hash
 }
@@ -177,6 +180,7 @@ function Invoke-Sync([ValidateSet("pull", "push")][string]$Mode) {
     $copies = New-Object System.Collections.Generic.List[object]
     $deletions = New-Object System.Collections.Generic.List[object]
     $conflicts = New-Object System.Collections.Generic.List[string]
+    $conflictPaths = New-Object System.Collections.Generic.List[string]
     $paths = @($local.Keys + $shared.Keys + $baseline.Keys | Sort-Object -Unique)
 
     foreach ($relative in $paths) {
@@ -190,6 +194,7 @@ function Invoke-Sync([ValidateSet("pull", "push")][string]$Mode) {
             $destinationChanged = $null -eq $destinationEntry -or [string]$destinationEntry.hash -ne $baselineHash
             if ($sourceChanged -and $destinationChanged) {
                 $conflicts.Add("$relative`tchanged on both sides") | Out-Null
+                $conflictPaths.Add($relative) | Out-Null
             } elseif ($sourceChanged) {
                 if ($null -eq $sourceEntry) {
                     $deletions.Add([pscustomobject]@{ Relative = $relative }) | Out-Null
@@ -204,6 +209,7 @@ function Invoke-Sync([ValidateSet("pull", "push")][string]$Mode) {
             $copies.Add([pscustomobject]@{ Relative = $relative; Hash = [string]$sourceEntry.hash }) | Out-Null
         } elseif ($null -ne $sourceEntry -and $null -ne $destinationEntry) {
             $conflicts.Add("$relative`tno common baseline and contents differ") | Out-Null
+            $conflictPaths.Add($relative) | Out-Null
         }
     }
 
@@ -227,6 +233,54 @@ function Invoke-Sync([ValidateSet("pull", "push")][string]$Mode) {
 
     if ($conflicts.Count -gt 0) {
         $report = Write-ConflictReport -Mode $Mode -Conflicts $conflicts.ToArray()
+        $winner = $ConflictWinner
+        if (-not $winner -and $env:CODEXKIT_INTERACTIVE_CONFLICTS -eq "1") {
+            $shown = @($conflictPaths | Select-Object -First 8)
+            $remaining = $conflictPaths.Count - $shown.Count
+            $details = ($shown | ForEach-Object { "- $_" }) -join "`r`n"
+            if ($remaining -gt 0) { $details += "`r`n- ... and $remaining more" }
+            $message = @"
+Project workspace conflicts need your decision:
+
+$details
+
+Yes = keep this computer's versions
+No = keep OneDrive versions
+Cancel = stop without changing files
+
+Every replaced file will be saved in the CodexKit quarantine.
+"@
+            try {
+                $shell = New-Object -ComObject WScript.Shell
+                $choice = $shell.Popup($message, 0, "CodexKit project conflict", 35)
+                if ($choice -eq 6) { $winner = "Local" }
+                elseif ($choice -eq 7) { $winner = "Shared" }
+            } catch {
+                Write-Warning "Could not show the conflict resolver: $($_.Exception.Message)"
+            }
+        }
+        if ($winner) {
+            $stamp = Get-Date -Format "yyyyMMdd-HHmmssfff"
+            foreach ($relative in @($conflictPaths | Sort-Object -Unique)) {
+                $winnerRoot = if ($winner -eq "Local") { $LocalRoot } else { $SharedRoot }
+                $loserRoot = if ($winner -eq "Local") { $SharedRoot } else { $LocalRoot }
+                $winnerEntry = if ($winner -eq "Local") { $local[$relative] } else { $shared[$relative] }
+                $loserSide = if ($winner -eq "Local") { "shared" } else { "local" }
+                $winnerPath = Join-Path $winnerRoot $relative
+                $loserPath = Join-Path $loserRoot $relative
+                if ($null -eq $winnerEntry) {
+                    Quarantine-File -Path $loserPath -Side $loserSide -Relative $relative -Stamp $stamp
+                } else {
+                    Copy-Verified -Source $winnerPath -Destination $loserPath `
+                        -ExpectedHash ([string]$winnerEntry.hash) -Side $loserSide `
+                        -Relative $relative -Stamp $stamp
+                }
+            }
+            Write-Host "Resolved $($conflictPaths.Count) project workspace conflict(s); winner: $winner." -ForegroundColor Yellow
+            $script:ConflictWinner = ""
+            Invoke-Sync -Mode $Mode
+            return
+        }
         throw "Project workspace $Mode found $($conflicts.Count) conflict(s). Nothing was changed. Review: $report"
     }
 

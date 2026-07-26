@@ -61,6 +61,68 @@ try {
     Assert-True ([bool]$defaultManifest.include_sessions) "manifest should record default session inclusion"
     Assert-True ([bool]$defaultManifest.include_desktop_state) "manifest should record default desktop-state inclusion"
     Assert-True ([bool]$defaultManifest.include_memory_subsystem) "manifest should record memory subsystem inclusion"
+    $managedVbsPath = Join-Path $defaultDestination "Start-CodexManaged.vbs"
+    $managedVbsBytes = [IO.File]::ReadAllBytes($managedVbsPath)
+    Assert-True (-not (
+        $managedVbsBytes.Length -ge 3 -and
+        $managedVbsBytes[0] -eq 0xEF -and
+        $managedVbsBytes[1] -eq 0xBB -and
+        $managedVbsBytes[2] -eq 0xBF
+    )) "hidden launcher must be UTF-8 without BOM so Windows Script Host can compile it"
+    $managedVbs = Get-Content -LiteralPath $managedVbsPath -Raw -Encoding UTF8
+    Assert-True ($managedVbs -match 'managed-launch-last\.log') "hidden launcher should retain the last managed-start log"
+    Assert-True ($managedVbs -match 'shell\.Popup') "hidden launcher should show a popup when managed startup fails"
+    Assert-True ($managedVbs -match 'shell\.Run\(command,\s*0,\s*True\)') "hidden launcher should wait for the managed process and inspect its exit code"
+    $compileOutput = & cscript.exe //Nologo $managedVbsPath /CompileTest 2>&1
+    Assert-True ($LASTEXITCODE -eq 0) "hidden launcher should compile under Windows Script Host: $($compileOutput -join ' ')"
+    foreach ($cmdName in @("Start-CodexManaged.cmd", "Switch-CodexMachine.cmd")) {
+        $cmdBytes = [IO.File]::ReadAllBytes((Join-Path $defaultDestination $cmdName))
+        Assert-True (-not (
+            $cmdBytes.Length -ge 3 -and
+            $cmdBytes[0] -eq 0xEF -and
+            $cmdBytes[1] -eq 0xBB -and
+            $cmdBytes[2] -eq 0xBF
+        )) "$cmdName must be UTF-8 without BOM so cmd.exe recognizes its first command"
+    }
+
+    $linkedSourceCodex = Join-Path $testRoot "linked-source\.codex"
+    $linkedDestination = Join-Path $testRoot "linked-kit"
+    $linkedSessions = Join-Path $linkedDestination "session-data\sessions"
+    $linkedArchived = Join-Path $linkedDestination "session-data\archived_sessions"
+    $linkedIndex = Join-Path $linkedDestination "session-data\session_index.jsonl"
+    foreach ($directory in @(
+        $linkedSourceCodex,
+        (Join-Path $linkedSourceCodex "skills"),
+        (Join-Path $linkedSourceCodex "minimax-skills"),
+        $linkedSessions,
+        $linkedArchived
+    )) {
+        New-Item -ItemType Directory -Force -Path $directory | Out-Null
+    }
+    $linkedRollout = Join-Path $linkedSessions "linked-session.jsonl"
+    [IO.File]::WriteAllText($linkedRollout, "{`"type`":`"session_meta`"}`n", (New-Object Text.UTF8Encoding($false)))
+    [IO.File]::WriteAllText($linkedIndex, "{`"id`":`"linked`",`"thread_name`":`"Linked`"}`n", (New-Object Text.UTF8Encoding($false)))
+    Copy-Item -LiteralPath $syncSkillSource -Destination (Join-Path $linkedSourceCodex "skills\codexkit-sync") -Recurse
+    cmd /c mklink /J "$(Join-Path $linkedSourceCodex 'sessions')" "$linkedSessions" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not create live-linked sessions fixture." }
+    cmd /c mklink /J "$(Join-Path $linkedSourceCodex 'archived_sessions')" "$linkedArchived" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not create live-linked archived sessions fixture." }
+    New-Item -ItemType HardLink -Path (Join-Path $linkedSourceCodex "session_index.jsonl") -Target $linkedIndex | Out-Null
+    Set-Content -LiteralPath (Join-Path $linkedSourceCodex ".codex-global-state.json") -Value '{"projects":{},"thread-projects":{}}' -Encoding UTF8
+    $linkedRolloutHashBefore = (Get-FileHash -LiteralPath $linkedRollout -Algorithm SHA256).Hash
+    $linkedIndexHashBefore = (Get-FileHash -LiteralPath $linkedIndex -Algorithm SHA256).Hash
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $exporter `
+        -SourceCodexHome $linkedSourceCodex `
+        -SourceAgentsRoot $sourceAgents `
+        -SourceGlobalMemory $sourceMemory `
+        -DestinationRoot $linkedDestination `
+        -Force
+    if ($LASTEXITCODE -ne 0) { throw "Live-linked export failed with exit code $LASTEXITCODE." }
+
+    Assert-True ((Get-FileHash -LiteralPath $linkedRollout -Algorithm SHA256).Hash -eq $linkedRolloutHashBefore) "live-linked session export must not rewrite a rollout onto itself"
+    Assert-True ((Get-FileHash -LiteralPath $linkedIndex -Algorithm SHA256).Hash -eq $linkedIndexHashBefore) "live-linked session export must not rewrite a hard-linked title index onto itself"
+    Assert-True (([IO.File]::ReadAllBytes($linkedRollout))[0] -ne 0) "live-linked rollout must not become zero-prefixed"
 
     $legacyDocuments = Join-Path $testRoot "legacy-profile\Documents"
     $sharedProjects = Join-Path $defaultDestination "CodexProjects"

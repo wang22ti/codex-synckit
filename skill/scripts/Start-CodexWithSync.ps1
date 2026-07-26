@@ -95,6 +95,15 @@ function Assert-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$Expec
         if ([int]$receipt.thread_catalog_unresolved_count -ne 0) {
             throw "The local thread catalog still has $($receipt.thread_catalog_unresolved_count) unresolved task(s)."
         }
+        if ([int]$receipt.automation_history_conflict_count -ne 0) {
+            throw "Automation history has $($receipt.automation_history_conflict_count) divergent rollout copy/copies."
+        }
+        if ([int]$receipt.automation_history_unresolved_count -ne 0) {
+            throw "Automation history still has $($receipt.automation_history_unresolved_count) unresolved run(s)."
+        }
+        if ([int]$receipt.automation_history_cataloged -ne [int]$receipt.automation_history_rollouts) {
+            throw "Automation history catalog coverage is incomplete: $($receipt.automation_history_cataloged)/$($receipt.automation_history_rollouts)."
+        }
     }
     $expectedCatalogHash = [string]$receipt.thread_catalog_database_sha256
     if ($expectedCatalogHash -eq "missing") {
