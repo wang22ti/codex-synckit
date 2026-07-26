@@ -8,21 +8,21 @@ Recommended default:
 
 - `SessionStart`: tell the main session where project and global memory live, and how to load them
 - after this skill is active, make an explicit recall decision before every reply; either perform the smallest relevant recall step first or make an internal safe-skip judgment
-- after meaningful work, make an explicit reflect decision; if the previous completed turn still lacks a reflect check by the next prompt, `UserPromptSubmit` may auto-run `reflect-memory.sh` before continuing
+- after meaningful work, make an explicit reflect decision; `UserPromptSubmit` only reminds the main session and does not run reflection itself
 
 Optional additions:
 
-- `UserPromptSubmit`: emit a per-turn recall reminder before replying and auto-run a previous-turn reflect check when the last completed turn has not yet recorded one
+- `UserPromptSubmit`: emit a per-turn reminder for explicit recall and reflect decisions
 
 The hook layer should not decide what belongs in project memory vs global memory.
 The hook layer should not decide recall routing, safe-skip justification, or what memory candidate should be logged.
 That routing decision belongs to the main session, which should follow `SKILL.md` and call `log-memory.sh` directly when something is worth remembering.
 On Windows CodexKit, the `SessionStart` hook may also perform deterministic structural bootstrap: create the standard empty `.learnings/` files for known existing project roots and update their registry records. Missing roots are skipped, and managed global-memory namespaces are not duplicated. This does not authorize hooks to create substantive learning content.
-The current setup injects the closed-loop contract on `SessionStart`; the main session remains responsible for Recall -> Reason -> Respond/Act -> Reflect, but `UserPromptSubmit` can auto-run `reflect-memory.sh` for the previous completed turn when no reflect check was recorded before the next prompt. For audit-sensitive `memory-and-improvement` work, the session should run an audit-focused subagent when runtime rules and user permission allow it, or explicitly note the unmet audit requirement.
+The current setup injects the closed-loop contract on `SessionStart`; the main session remains responsible for Recall -> Reason -> Respond/Act -> Reflect, and `UserPromptSubmit` only reminds it to make those decisions. For audit-sensitive `memory-and-improvement` work, the session should run an audit-focused subagent when runtime rules and user permission allow it, or explicitly note the unmet audit requirement.
 For the dedicated summary-first recall helper during later turns, use `scripts/recall/recall-memory.sh`.
 Its `auto` mode is only a lightweight scope heuristic after the main session has already decided recall is needed; it may resolve to `project`, `global`, or `both`, but it does not replace the main session's judgment about whether memory is relevant at all.
 For meaningful turns that may need a structured post-task check, use `scripts/recall/reflect-memory.sh`.
-The explicit judgment requirement still belongs to the main session, but the `UserPromptSubmit` hook may proactively run the advisory reflect helper for the previous completed turn so the session continues with a reflect result already available.
+The explicit judgment and execution requirement belongs to the main session; the `UserPromptSubmit` hook does not run this helper.
 After the recall decision, the session should run a short reasoning checklist:
 
 - what relevant memory did recall surface?
@@ -112,7 +112,7 @@ If your Codex runtime does not expand `~` in hook commands, use the absolute pat
 1. Enable the optional `UserPromptSubmit` hook.
 2. Start or continue a Codex session.
 3. Send a new prompt.
-4. Verify you see a recall reminder before replying, and when the previous completed turn lacked reflect, verify you also see an injected `reflect-memory.sh` result before the new turn continues.
+4. Verify you see a recall and reflect reminder before replying. For an explicit user-profile cue, the hook may additionally inject the small `user-profile/SUMMARY.md` layer.
 
 ## Troubleshooting
 
@@ -138,5 +138,5 @@ chmod +x ~/.codex/skills/memory-and-improvement/scripts/maintenance/writeback-me
 ## Security Notes
 
 - Hook scripts may print memory locations and loading guidance and maintain the standard empty `.learnings/` structure and registry for known existing project roots.
-- Hook scripts may auto-run the advisory previous-turn reflect helper, but they must not silently decide project-vs-global routing or final logging actions.
+- Hook scripts do not run general project/global recall or reflection and must not silently decide routing or perform final logging actions. The narrow exception is summary-first injection of `user-profile/SUMMARY.md` for explicit profile cues.
 - Do not log secrets, tokens, or raw private configs into `./.learnings/` or `~/global-memory/`.
