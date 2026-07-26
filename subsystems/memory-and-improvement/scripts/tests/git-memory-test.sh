@@ -24,9 +24,7 @@ HOME_ROOT="$TMP_ROOT/home"
 mkdir -p "$NO_GIT_BIN" "$PROJECT_ROOT" "$HOME_ROOT"
 
 for cmd_name in bash basename dirname realpath grep awk find sort head tr sed cat mktemp mkdir date pwd touch; do
-    cmd_path="$(type -P "$cmd_name")"
-    printf '#!/bin/bash\nexec "%s" "$@"\n' "$cmd_path" > "$NO_GIT_BIN/$cmd_name"
-    chmod +x "$NO_GIT_BIN/$cmd_name"
+    ln -s "$(command -v "$cmd_name")" "$NO_GIT_BIN/$cmd_name"
 done
 
 set +e

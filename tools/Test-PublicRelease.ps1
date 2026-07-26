@@ -27,6 +27,8 @@ $required = @(
     "CHANGELOG.md",
     "CODE_OF_CONDUCT.md",
     "CONTRIBUTING.md",
+    "dashboard\README.md",
+    "dashboard\package.json",
     "Install-CodexSyncKit.cmd",
     "Install-CodexSyncKit.ps1",
     "LICENSE",
@@ -51,7 +53,7 @@ foreach ($relative in $required) {
 
 $allowedTopLevel = @(
     ".git", ".github", ".gitattributes", ".gitignore", "CHANGELOG.md", "CODE_OF_CONDUCT.md",
-    "CONTRIBUTING.md", "dist", "docs", "Install-CodexSyncKit.cmd",
+    "CONTRIBUTING.md", "dashboard", "dist", "docs", "Install-CodexSyncKit.cmd",
     "Install-CodexSyncKit.ps1", "LICENSE",
     "README.md", "README.zh-CN.md", "SECURITY.md", "skill", "subsystems",
     "THIRD_PARTY_NOTICES.md", "tools"

@@ -153,6 +153,59 @@ function Resolve-PathLoose {
     }
 }
 
+function Get-NormalizedPath {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $null }
+    try {
+        return ([System.IO.Path]::GetFullPath((Resolve-PathLoose $Path))).TrimEnd('\','/')
+    } catch {
+        return $null
+    }
+}
+
+function Get-LinkTargetPaths {
+    param([string]$Path)
+    $targets = New-Object System.Collections.Generic.List[string]
+    if (-not (Test-Path -LiteralPath $Path)) { return @() }
+
+    try {
+        $item = Get-Item -LiteralPath $Path -Force
+        foreach ($target in @($item.Target)) {
+            if ([string]::IsNullOrWhiteSpace([string]$target)) { continue }
+            $candidate = [string]$target
+            if (-not [System.IO.Path]::IsPathRooted($candidate)) {
+                $candidate = Join-Path (Split-Path -Parent $item.FullName) $candidate
+            }
+            $normalized = Get-NormalizedPath $candidate
+            if ($normalized) { $targets.Add($normalized) }
+        }
+    } catch {
+        return @()
+    }
+    return @($targets)
+}
+
+function Test-SamePathEntity {
+    param([string]$A, [string]$B)
+    $aPaths = New-Object System.Collections.Generic.List[string]
+    $bPaths = New-Object System.Collections.Generic.List[string]
+    $normalizedA = Get-NormalizedPath $A
+    $normalizedB = Get-NormalizedPath $B
+    if ($normalizedA) { $aPaths.Add($normalizedA) }
+    if ($normalizedB) { $bPaths.Add($normalizedB) }
+    foreach ($target in @(Get-LinkTargetPaths $A)) { $aPaths.Add($target) }
+    foreach ($target in @(Get-LinkTargetPaths $B)) { $bPaths.Add($target) }
+
+    foreach ($aPath in $aPaths) {
+        foreach ($bPath in $bPaths) {
+            if ($aPath.Equals($bPath, [StringComparison]::OrdinalIgnoreCase)) {
+                return $true
+            }
+        }
+    }
+    return $false
+}
+
 function Join-PathMany {
     param([Parameter(Mandatory=$true)][string[]]$Parts)
     $Parts = @($Parts)
@@ -203,7 +256,9 @@ function Add-ManifestFile {
     try {
         $relative = $Path.Substring($script:DestinationRoot.Length).TrimStart('\','/')
         $item = Get-Item -LiteralPath $Path -Force
-        $hash = if (-not $item.PSIsContainer) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash } else { $null }
+        $hash = if (-not $item.PSIsContainer) {
+            (Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop).Hash
+        } else { $null }
         $script:ManifestFiles.Add([pscustomobject]@{
             category = $Category
             path = $relative
@@ -306,6 +361,12 @@ function Copy-FileSafe {
     Ensure-Directory (Split-Path -Parent $Destination)
 
     if (Test-Path -LiteralPath $Destination) {
+        if (Test-SamePathEntity -A $Source -B $Destination) {
+            Write-Skip "source and destination are the same file: $Destination"
+            Add-Action -Type "copy-file" -Source $Source -Destination $Destination -Status "same-entity"
+            Add-ManifestFile -Path $Destination -Category $Category -Source $Source
+            return
+        }
         if (Is-SameFileHash -A $Source -B $Destination) {
             Write-Skip "unchanged: $Destination"
             Add-Action -Type "copy-file" -Source $Source -Destination $Destination -Status "unchanged"
@@ -331,12 +392,21 @@ function Write-TextFileSafe {
     param(
         [Parameter(Mandatory=$true)][string]$Destination,
         [Parameter(Mandatory=$true)][string]$Content,
-        [string]$Category = "generated"
+        [string]$Category = "generated",
+        [switch]$NoBom
     )
     Ensure-Directory (Split-Path -Parent $Destination)
     if (Test-Path -LiteralPath $Destination -PathType Leaf) {
         $existing = Get-Content -LiteralPath $Destination -Raw -ErrorAction SilentlyContinue
-        if ($existing -eq $Content) {
+        $hasUtf8Bom = $false
+        if ($NoBom) {
+            $prefix = [IO.File]::ReadAllBytes($Destination)
+            $hasUtf8Bom = $prefix.Length -ge 3 -and
+                $prefix[0] -eq 0xEF -and
+                $prefix[1] -eq 0xBB -and
+                $prefix[2] -eq 0xBF
+        }
+        if ($existing -eq $Content -and -not $hasUtf8Bom) {
             Add-Action -Type "write-file" -Source "generated" -Destination $Destination -Status "unchanged"
             Add-ManifestFile -Path $Destination -Category $Category -Source "generated"
             return
@@ -347,7 +417,11 @@ function Write-TextFileSafe {
         Write-Host "[DRY]  write $Destination" -ForegroundColor DarkCyan
         Add-Action -Type "write-file" -Source "generated" -Destination $Destination -Status "dry-run"
     } else {
-        Set-Content -LiteralPath $Destination -Value $Content -Encoding UTF8
+        if ($NoBom) {
+            [IO.File]::WriteAllText($Destination, $Content, (New-Object Text.UTF8Encoding($false)))
+        } else {
+            Set-Content -LiteralPath $Destination -Value $Content -Encoding UTF8
+        }
         Add-Action -Type "write-file" -Source "generated" -Destination $Destination -Status "written"
         Add-ManifestFile -Path $Destination -Category $Category -Source "generated"
     }
@@ -400,6 +474,17 @@ function Copy-DirectorySafe {
     }
 
     Ensure-Directory $Destination
+    if (Test-SamePathEntity -A $Source -B $Destination) {
+        Write-Skip "source and destination are the same directory: $Destination"
+        Add-Action -Type "copy-dir" -Source $Source -Destination $Destination -Status "same-entity"
+        $sameEntityRoot = (Resolve-Path -LiteralPath $Source).Path
+        foreach ($file in @(Get-ChildItem -LiteralPath $Source -File -Recurse -Force -ErrorAction SilentlyContinue)) {
+            if (Test-ExcludedPath -File $file -Root $sameEntityRoot) { continue }
+            $relative = $file.FullName.Substring($sameEntityRoot.Length).TrimStart('\','/')
+            Add-ManifestFile -Path (Join-Path $Destination $relative) -Category $Category -Source $file.FullName
+        }
+        return
+    }
     $root = (Resolve-Path -LiteralPath $Source).Path
     $files = Get-ChildItem -LiteralPath $Source -File -Recurse -Force -ErrorAction SilentlyContinue
 
@@ -729,6 +814,12 @@ function Export-Hooks {
                 }
                 Copy-FileSafe -Source $ref -Destination $dest -Category "hook-scripts"
                 $rows.Add([pscustomobject]@{ source = $ref; extracted_as = $dest }) | Out-Null
+            }
+            $coverageHelper = Join-Path $sourceBinRoot "memory-project-coverage.ps1"
+            if (Test-Path -LiteralPath $coverageHelper -PathType Leaf) {
+                $coverageDestination = Join-PathMany @($scriptsDest, "codex-bin", "memory-project-coverage.ps1")
+                Copy-FileSafe -Source $coverageHelper -Destination $coverageDestination -Category "hook-scripts"
+                $rows.Add([pscustomobject]@{ source = $coverageHelper; extracted_as = $coverageDestination }) | Out-Null
             }
             if (-not $DryRun) {
                 $csv = Join-Path $hooksDest "external-hook-paths.csv"
@@ -1356,7 +1447,7 @@ function Test-HooksCurrent {
         $installed = Get-Content -LiteralPath $target -Raw -Encoding UTF8
         $null = $installed | ConvertFrom-Json
         if ($installed.Trim() -ne $expected.Trim()) { return $false }
-        foreach ($name in @("memory-session-start.ps1", "memory-user-prompt.ps1")) {
+        foreach ($name in @("memory-session-start.ps1", "memory-user-prompt.ps1", "memory-project-coverage.ps1")) {
             $source = Join-Path $KitRoot "hooks\scripts\codex-bin\$name"
             $destination = Join-Path $CodexHome "bin\$name"
             if (-not (Test-Path -LiteralPath $source -PathType Leaf) -or
@@ -2691,7 +2782,8 @@ if ($InstallHooks) {
         Enable-CodexHooksFeature
         foreach ($hookScript in @(
             (Join-Path $codexBinTarget "memory-session-start.ps1"),
-            (Join-Path $codexBinTarget "memory-user-prompt.ps1")
+            (Join-Path $codexBinTarget "memory-user-prompt.ps1"),
+            (Join-Path $codexBinTarget "memory-project-coverage.ps1")
         )) {
             $tokens = $null
             $parseErrors = $null
@@ -2832,7 +2924,7 @@ set "exitCode=%ERRORLEVEL%"
 if "%~1"=="" pause
 exit /b %exitCode%
 '@
-    Write-TextFileSafe -Destination (Join-Path $script:DestinationRoot "Switch-CodexMachine.cmd") -Content $content -Category "generated"
+    Write-TextFileSafe -Destination (Join-Path $script:DestinationRoot "Switch-CodexMachine.cmd") -Content $content -Category "generated" -NoBom
 }
 
 function Write-StartCommands {
@@ -2844,17 +2936,29 @@ set "exitCode=%ERRORLEVEL%"
 if "%~1"=="" pause
 exit /b %exitCode%
 '@
-    Write-TextFileSafe -Destination (Join-Path $script:DestinationRoot "Start-CodexManaged.cmd") -Content $managed -Category "generated"
+    Write-TextFileSafe -Destination (Join-Path $script:DestinationRoot "Start-CodexManaged.cmd") -Content $managed -Category "generated" -NoBom
 
     $managedVbs = @'
 Set fso = CreateObject("Scripting.FileSystemObject")
 Set shell = CreateObject("WScript.Shell")
+If WScript.Arguments.Named.Exists("CompileTest") Then WScript.Quit 0
 root = fso.GetParentFolderName(WScript.ScriptFullName)
 script = root & "\skills\codex-skills\codexkit-sync\scripts\Start-CodexWithSync.ps1"
-command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File " & Chr(34) & script & Chr(34)
-shell.Run command, 0, False
+stateDir = shell.ExpandEnvironmentStrings("%USERPROFILE%") & "\.local\state\codexkit"
+If Not fso.FolderExists(stateDir) Then fso.CreateFolder(stateDir)
+logPath = stateDir & "\managed-launch-last.log"
+visibleLauncher = root & "\Start-CodexManaged.cmd"
+inner = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File " & Chr(34) & script & Chr(34) & " > " & Chr(34) & logPath & Chr(34) & " 2>&1"
+command = "cmd.exe /d /s /c " & Chr(34) & inner & Chr(34)
+exitCode = shell.Run(command, 0, True)
+If exitCode <> 0 Then
+    message = "ChatGPT Managed startup failed (exit code " & exitCode & ")." & vbCrLf & vbCrLf & _
+        "Log: " & logPath & vbCrLf & _
+        "Run this launcher for visible diagnostics:" & vbCrLf & visibleLauncher
+    shell.Popup message, 0, "CodexKit managed startup failed", 16
+End If
 '@
-    Write-TextFileSafe -Destination (Join-Path $script:DestinationRoot "Start-CodexManaged.vbs") -Content $managedVbs -Category "generated"
+    Write-TextFileSafe -Destination (Join-Path $script:DestinationRoot "Start-CodexManaged.vbs") -Content $managedVbs -Category "generated" -NoBom
 }
 
 function Write-Readme {
@@ -2972,6 +3076,11 @@ powershell -ExecutionPolicy Bypass -File .\Install-CodexKitForWindows.ps1 -Repai
 
 Every machine uses the same Managed lifecycle. The running-device warning is advisory; do not actively edit the same conversation on two machines, and allow OneDrive to finish syncing `session-data` before opening a conversation that was just updated elsewhere.
 
+If project workspace files have genuine two-sided conflicts, Managed startup
+shows the affected paths and offers to keep this computer's versions, keep the
+OneDrive versions, or cancel. Nothing is overwritten without an explicit
+choice, and every replaced version is retained in the device-local quarantine.
+
 `-InstallSessionLinks` links `.codex\sessions`, `.codex\archived_sessions`, and `.codex\session_index.jsonl`. The title index controls recent thread names. Desktop sidebar project order, pinned state, task-to-project assignments, and workspace hints live in `.codex\.codex-global-state.json`; reconcile that organization with the controlled commands below.
 
 `Pull` installs the shared primary organization locally; `Push` publishes this machine's organization to the shared primary. Both preserve device-only window, permission, browser-tab, and active-workspace state. Use `Sync` only for an intentional three-way merge; same-field conflicts then keep the currently synchronizing machine's value with device-local diagnostics.
@@ -2979,6 +3088,15 @@ Every machine uses the same Managed lifecycle. The running-device warning is adv
 When no other device has a fresh running heartbeat, controlled synchronization also removes duplicate `session_index.jsonl` rows by task ID and retains the newest title record. Malformed JSON blocks repair, and one rollback copy is retained device-locally.
 
 The desktop task list is additionally indexed in each machine's local `.codex\state_5.sqlite`. A managed Pull reconciles missing top-level tasks from the linked OneDrive rollout files before launch, preserves existing database rows, ignores legacy child-rollout aliases, and includes the verified database hash in the launch receipt. Never copy or live-link this SQLite database between machines.
+
+Automation run history is merged as a union of shared rollout thread IDs, not
+by copying SQLite. Independent runs from different machines all survive.
+Identical duplicate files are redundant, a strict-prefix copy may yield to its
+complete extension, and two valid divergent transcripts with the same thread
+ID stop before catalog mutation. A corrupt OneDrive conflict copy is ignored
+only when a valid copy exists, with device-local diagnostics. Managed Pull
+reports automation runs cataloged, inserted, path-repaired, conflicted, and
+unresolved in its receipt.
 
 Synchronization also checks for catastrophic state loss before installing a merge. If a file suddenly shrinks to a small shell or loses workspace/task markers and thread references, synchronization is blocked and the candidate is copied to the device-local `%USERPROFILE%\.local\state\codexkit\desktop-state-quarantine` folder. OneDrive keeps only the shared `desktop-state\.codex-global-state.json`, one timestamped backup, and the small advisory `desktop-state\codex-running.json`; conflict reports are device-local as well.
 

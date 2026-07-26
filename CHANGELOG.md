@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Added the local Memory Observatory dashboard with registry/sidebar/global
+  coverage, bounded discovery, explicit registration and recoverable removal,
+  sortable directory tables, activity details, and allowlisted on-demand text
+  previews.
+- Merged automation run history across machines by rollout thread ID and
+  repaired missing or stale local automation rollout paths without sharing the
+  device-local SQLite database.
+- Added inline project-workspace conflict resolution to Managed launch:
+  explicitly keep the local or OneDrive version, quarantine the replaced copy,
+  and retry synchronization.
+- Fixed false conflicts when a baseline-tracked project file was deleted on
+  both sides.
 - Reorganized the `memory-and-improvement` README around the same five-part
   structure as the main project, while moving detailed maintainer material to
   dedicated technical references.

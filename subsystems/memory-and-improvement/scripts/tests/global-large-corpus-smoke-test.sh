@@ -64,7 +64,7 @@ EOF
         printf '**Status**: pending\n'
         printf '**Area**: docs\n\n'
         if [[ "$i" -eq 400 ]]; then
-            summary="Preferred name remains Example at scale"
+            summary="Preferred name remains Zitai at scale"
             recurrence="4"
             pattern_key="global.large.profile.fact"
             details="This is stable profile information that should favor a factual file instead of summary promotion."

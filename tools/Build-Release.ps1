@@ -28,7 +28,7 @@ try {
     New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
     $copyNames = @(
         ".github", ".gitattributes", ".gitignore", "CHANGELOG.md", "CODE_OF_CONDUCT.md",
-        "CONTRIBUTING.md", "docs", "Install-CodexSyncKit.cmd",
+        "CONTRIBUTING.md", "dashboard", "docs", "Install-CodexSyncKit.cmd",
         "Install-CodexSyncKit.ps1", "LICENSE",
         "README.md", "README.zh-CN.md", "SECURITY.md", "skill", "subsystems",
         "THIRD_PARTY_NOTICES.md", "tools"

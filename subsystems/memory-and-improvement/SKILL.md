@@ -227,20 +227,23 @@ Shortcut wrappers:
 ## Hook Integration
 
 Hooks are opt-in.
-Recommended default: enable `SessionStart` so each new Codex session begins with memory locations plus loading rules, then use `UserPromptSubmit` to remind the main session to recall before replying and reflect before the final response.
+Recommended default: enable `SessionStart` so each new Codex session begins with memory locations plus loading rules, then use `UserPromptSubmit` to reinforce recall and auto-run a previous-turn reflect check when the last completed turn still lacks one.
 
 Hook role:
 
 - hooks may trigger reminders or inject runtime guidance
 - hooks must not decide recall routing or safe-skip justification
 - hooks must not decide project-vs-global routing or memory type
-- the main session remains responsible for every recall, skip, reflect, and logging decision
+- the main session remains responsible for every recall, skip, and logging decision, and for interpreting any auto-run reflect result before acting on it
 
 Minimal setup uses `scripts/hooks/activator.sh`.
 Current behavior:
 
 - `activator.sh` injects runtime guidance on `SessionStart`, not an automatic preload of memory contents
-- `user-prompt-recall-reminder.sh` reinforces recall on every prompt and reminds the main session to run `reflect-memory.sh` before the final response when appropriate
+- Windows CodexKit runs `memory-project-coverage.ps1` on `SessionStart`: it initializes the standard empty `.learnings/` structure for every existing Codex sidebar project, registers those project memories, and includes the current project even before it appears in the sidebar
+- missing sidebar roots are reported but never fabricated; paths inside the managed global-memory namespace are classified as `global-managed` instead of being duplicated in the project registry
+- this bootstrap is structural only: it must not invent learnings, make routing decisions, or silently convert arbitrary project documents into memory
+- `user-prompt-recall-reminder.sh` reinforces recall on every prompt and can auto-run `reflect-memory.sh` for the previous completed turn when no reflect check was recorded before the next prompt
 - project memory remains the detected project root's `.learnings/` directory, even when that root is `~`
 - when the skill is installed from CodexKit, the project registry lives at `CodexKit/memory-system/project-memory-registry.tsv`
 - local project records include the current device name; OneDrive project records use `onedrive`, no device identity (`-`), and a path relative to the OneDrive root
@@ -250,7 +253,7 @@ Current behavior:
 - registry writes are skipped when the record already exists, and the write lock remains machine-local rather than being synchronized through OneDrive
 - OneDrive conflict-copy TSV files are read and folded back into the canonical registry on the next real registry update
 - logs, interval timestamps, hook reflect markers, removed-project archives, scheduled-task instances, and Git metadata remain device-local by design
-- the startup guide points the main session toward `recall-memory.sh`, while `UserPromptSubmit` keeps the per-turn recall and reflect responsibilities visible without running either decision automatically
+- the startup guide points the main session toward `recall-memory.sh`, while `UserPromptSubmit` can surface a previous-turn `reflect-memory.sh` result before the next turn begins
 - shortcut wrappers stay convenience entrypoints only; they must keep delegating to the core scripts
 
 ## References
