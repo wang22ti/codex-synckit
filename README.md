@@ -138,6 +138,25 @@ In the paths below, `%USERPROFILE%` is the current Windows user folder and
 
 ## Compared with synchronization tools
 
+### Codex SyncKit, CC Switch, and Codex++
+
+These three projects work at different layers:
+
+| Project | Primary job | Strongest capabilities | Not its main focus |
+| --- | --- | --- | --- |
+| **Codex SyncKit** | Resume a complete Codex working environment on another Windows PC | Conversations and archives, sidebar organization, managed project workspaces, skills, hooks, global guidance, memory, automations, and lifecycle-aware OneDrive synchronization | Switching model providers or modifying the Codex UI |
+| [CC Switch](https://github.com/farion1231/cc-switch) | Centrally manage providers and extensions across multiple AI coding tools | Provider and account switching, MCP and Skills management, prompts, usage and cost statistics, local routing, and failover across Codex, Claude, Gemini, and other tools | Reconstructing the complete Codex Desktop working state on another PC |
+| [Codex++](https://github.com/b-nnett/codex-plusplus) | Add local tweaks to Codex Desktop | UI changes, custom settings pages, renderer and main-process tweaks, and native bridge APIs | Cross-device workspace or conversation continuity |
+
+In short, **CC Switch controls what services the agents use, Codex++ changes
+what the Codex client can do, and Codex SyncKit carries the working state
+between PCs**. They can complement one another. If CC Switch and Codex SyncKit
+are both installed, choose one owner for shared Skills and overlapping
+configuration files so that two synchronization systems do not overwrite each
+other.
+
+### Other synchronization tools
+
 The comparison below covers tools that synchronize agent configuration,
 context, or working state. It does not compare the agents themselves.
 

@@ -118,6 +118,23 @@ OneDrive 私有同步包中的位置。
 
 ## 与同步工具对比
 
+### Codex SyncKit、CC Switch 与 Codex++
+
+这三个项目工作在不同层面：
+
+| 项目 | 核心定位 | 最擅长的能力 | 不是主要目标 |
+| --- | --- | --- | --- |
+| **Codex SyncKit** | 在另一台 Windows 电脑上恢复完整的 Codex 工作环境 | 会话及归档、侧栏组织、托管项目工作区、Skills、Hooks、全局指令、记忆、自动化，以及配合 Codex 生命周期的 OneDrive 同步 | 切换模型供应商或修改 Codex 界面 |
+| [CC Switch](https://github.com/farion1231/cc-switch) | 集中管理多个 AI 编码工具的供应商和扩展 | 在 Codex、Claude、Gemini 等工具之间管理 Provider、账号、MCP、Skills、Prompt、用量统计、本地路由和故障转移 | 在另一台电脑上重建完整的 Codex Desktop 工作现场 |
+| [Codex++](https://github.com/b-nnett/codex-plusplus) | 为 Codex Desktop 加载本地 tweak | 修改界面、增加设置页面、运行渲染进程和主进程扩展，以及调用原生桥接 API | 跨设备恢复工作区或会话连续性 |
+
+简言之，**CC Switch 管 Agent 使用什么服务，Codex++ 管 Codex 客户端能增加
+什么功能，Codex SyncKit 管工作现场如何转移到另一台电脑**。三者可以互补。
+如果同时安装 CC Switch 和 Codex SyncKit，应为共享 Skills 和重叠配置文件指定
+唯一管理方，避免两套同步机制互相覆盖。
+
+### 其他同步工具
+
 下表比较的是同步 Agent 配置、上下文或工作状态的工具，不是在比较 Agent 本身。
 
 | 工具 | 主要同步对象 | 跨设备方式 | 范围边界 |
