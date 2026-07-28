@@ -37,8 +37,10 @@ Codex/ChatGPT desktop or Codex CLI, and Node.js for the desktop-state helpers.
 The optional memory subsystem's Bash maintenance tools require Git for Windows
 or another compatible Bash runtime.
 
-1. Download and extract the latest ZIP from
-   [Releases](https://github.com/wang22ti/codex-synckit/releases/latest).
+1. Download and extract
+   [`codex-synckit-0.1.0-alpha.zip`](https://github.com/wang22ti/codex-synckit/releases/download/v0.1.0-alpha/codex-synckit-0.1.0-alpha.zip).
+   See the [release notes](https://github.com/wang22ti/codex-synckit/releases/tag/v0.1.0-alpha)
+   for Alpha limitations and verification details.
 2. Double-click `Install-CodexSyncKit.cmd` to start setup.
 
 The default setup includes complete conversations and sidebar organization.
