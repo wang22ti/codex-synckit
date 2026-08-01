@@ -34,9 +34,14 @@ jobs:
             ".\dist\codex-synckit-$version.zip",
             ".\dist\codex-synckit-$version.zip.sha256",
             "--verify-tag",
-            "--generate-notes",
             "--title", "Codex SyncKit $version"
           )
+          $notesFile = ".\docs\releases\$version.md"
+          if (Test-Path -LiteralPath $notesFile -PathType Leaf) {
+            $arguments += @("--notes-file", $notesFile)
+          } else {
+            $arguments += "--generate-notes"
+          }
           if ($version.Contains("-")) {
             $arguments += "--prerelease"
           }

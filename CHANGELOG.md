@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.2.0-alpha - 2026-08-01
+
+- Reconciled completed automation runs into each device-local scheduler during
+  Managed Pull, preventing another PC from repeating a run already completed
+  elsewhere while keeping all SQLite databases local to that device.
+- Archived imported completed runs so cross-device history does not create a
+  new unread notification, and stopped retired automation IDs from blocking
+  Managed launch.
+- Added fail-closed scheduler coverage and database-hash checks before Managed
+  ChatGPT starts, plus regression coverage for cross-device imports,
+  watermarks, repaired pending rows, and retired definitions.
 - Added the local Memory Observatory dashboard with registry/sidebar/global
   coverage, bounded discovery, explicit registration and recoverable removal,
   sortable directory tables, activity details, and allowlisted on-demand text

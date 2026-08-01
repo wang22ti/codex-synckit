@@ -20,6 +20,7 @@ $MergeHelper = Join-Path $PSScriptRoot "Merge-CodexSidebarState.mjs"
 $SessionIndexRepairHelper = Join-Path $PSScriptRoot "Repair-CodexSessionIndex.mjs"
 $ThreadCatalogRepairHelper = Join-Path $PSScriptRoot "Repair-CodexThreadCatalog.mjs"
 $ThreadCatalogDatabase = Join-Path $CodexHome "state_5.sqlite"
+$AutomationDatabaseRoot = Join-Path $CodexHome "sqlite"
 $SessionsRoot = Join-Path $KitRoot "session-data\sessions"
 $ArchivedSessionsRoot = Join-Path $KitRoot "session-data\archived_sessions"
 $ProjectlessRoot = Join-Path $env:USERPROFILE "Documents\Codex"
@@ -27,6 +28,7 @@ $BaseState = Join-Path $env:USERPROFILE ".local\state\codexkit\desktop-sidebar-m
 $safeDeviceName = ([string]$env:COMPUTERNAME -replace '[^A-Za-z0-9._-]', '_')
 if ([string]::IsNullOrWhiteSpace($safeDeviceName)) { $safeDeviceName = "unknown-device" }
 $LocalStateRoot = Join-Path $env:USERPROFILE ".local\state\codexkit"
+$AutomationRunStatusRepair = Join-Path $LocalStateRoot "automation-run-status-repair.json"
 $SyncReceipt = Join-Path $LocalStateRoot "last-desktop-sync.json"
 $QuarantineDir = Join-Path $LocalStateRoot "desktop-state-quarantine"
 $ConflictDir = Join-Path $LocalStateRoot "desktop-state-conflicts"
@@ -44,6 +46,7 @@ function Get-ShortHash($Path) {
 }
 
 function Get-FullHashOrMissing($Path) {
+    if ([string]::IsNullOrWhiteSpace([string]$Path)) { return "missing" }
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return "missing" }
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
 }
@@ -184,6 +187,13 @@ function Show-StateStatus {
                 [int]$receipt.automation_history_conflict_count,
                 [int]$receipt.automation_history_unresolved_count,
                 [int]$receipt.thread_catalog_corrupt_rollout_copy_count) -ForegroundColor DarkCyan
+            Write-Host ("Automation scheduler: {0}; runs {1}/{2}; imported {3}; last-run watermarks advanced {4}; unresolved definitions {5}" -f
+                [string]$receipt.automation_scheduler_status,
+                [int]$receipt.automation_scheduler_runs_cataloged,
+                [int]$receipt.automation_scheduler_runs,
+                [int]$receipt.automation_scheduler_runs_inserted_count,
+                [int]$receipt.automation_scheduler_watermarks_advanced_count,
+                [int]$receipt.automation_scheduler_unresolved_definition_count) -ForegroundColor DarkCyan
         } catch {
             Write-Host "Automation history receipt: unreadable ($($_.Exception.Message))" -ForegroundColor Yellow
         }
@@ -228,6 +238,16 @@ function Get-NodeExecutable {
         }
     }
     throw "Could not find the bundled Node.js runtime required for conflict-aware sidebar merging. Install a primary-runtime Codex plugin or set CODEXKIT_NODE_EXE."
+}
+
+function Get-AutomationStateDatabase {
+    if (-not (Test-Path -LiteralPath $AutomationDatabaseRoot -PathType Container)) {
+        return $null
+    }
+    $candidates = @(Get-ChildItem -LiteralPath $AutomationDatabaseRoot -File -Filter "codex*.db" -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTimeUtc -Descending)
+    if ($candidates.Count -eq 0) { return $null }
+    return $candidates[0].FullName
 }
 
 function Restore-File($Destination, $Backup, [bool]$Existed) {
@@ -437,6 +457,14 @@ function Repair-ThreadCatalog {
             automation_history_path_repaired_count = 0
             automation_history_unresolved_count = 0
             corrupt_rollout_copy_count = 0
+            automation_scheduler_status = "not-requested"
+            automation_scheduler_database = $null
+            automation_scheduler_runs = 0
+            automation_scheduler_runs_cataloged = 0
+            automation_scheduler_runs_inserted_count = 0
+            automation_scheduler_pending_repaired_count = 0
+            automation_scheduler_watermarks_advanced_count = 0
+            automation_scheduler_unresolved_definition_count = 0
         }
     }
     foreach ($requiredPath in @($SessionsRoot, $ArchivedSessionsRoot)) {
@@ -449,17 +477,32 @@ function Repair-ThreadCatalog {
     }
 
     $node = Get-NodeExecutable
+    $automationDatabase = Get-AutomationStateDatabase
     $sessionIndexInputHash = Get-FullHashOrMissing $SessionIndex
     $work = Join-Path ([IO.Path]::GetTempPath()) "codexkit-thread-catalog-$PID-$([guid]::NewGuid().ToString('N'))"
     Ensure-Dir $work
     $reportPath = Join-Path $work "report.json"
     try {
-        $nodeOutput = @(& $node --no-warnings $ThreadCatalogRepairHelper `
-            --database $ThreadCatalogDatabase `
-            --sessions-root $SessionsRoot `
-            --archived-root $ArchivedSessionsRoot `
-            --session-index $SessionIndex `
-            --report-output $reportPath)
+        $nodeArguments = @(
+            "--no-warnings",
+            $ThreadCatalogRepairHelper,
+            "--database", $ThreadCatalogDatabase,
+            "--sessions-root", $SessionsRoot,
+            "--archived-root", $ArchivedSessionsRoot,
+            "--session-index", $SessionIndex,
+            "--report-output", $reportPath
+        )
+        if ($automationDatabase) {
+            $nodeArguments += @("--automation-database", $automationDatabase)
+        }
+        $automationRoot = Join-Path $CodexHome "automations"
+        if (Test-Path -LiteralPath $automationRoot -PathType Container) {
+            $nodeArguments += @("--automation-root", $automationRoot)
+        }
+        if (Test-Path -LiteralPath $AutomationRunStatusRepair -PathType Leaf) {
+            $nodeArguments += @("--automation-run-status-repair", $AutomationRunStatusRepair)
+        }
+        $nodeOutput = @(& $node @nodeArguments)
         if ($LASTEXITCODE -ne 0) {
             if (Test-Path -LiteralPath $reportPath -PathType Leaf) {
                 Ensure-Dir $ThreadCatalogConflictDir
@@ -496,6 +539,23 @@ function Repair-ThreadCatalog {
         if ([int]$report.automation_history_unresolved_count -ne 0) {
             throw "Automation history verification found $($report.automation_history_unresolved_count) unresolved run(s)."
         }
+        if ([int]$report.automation_history_unknown_id_count -ne 0) {
+            throw "Automation history contains $($report.automation_history_unknown_id_count) run(s) without an Automation ID."
+        }
+        if ([int]$report.automation_history_rollouts -gt 0) {
+            if ([string]$report.automation_scheduler_status -ne "reconciled") {
+                throw "Local automation scheduler reconciliation is incomplete ($($report.automation_scheduler_status)). Open and close ChatGPT once on this device before enabling automation synchronization, then retry Managed launch."
+            }
+            if ([int]$report.automation_scheduler_runs_cataloged -ne [int]$report.automation_scheduler_runs) {
+                throw "Local automation scheduler run coverage is incomplete: $($report.automation_scheduler_runs_cataloged)/$($report.automation_scheduler_runs)."
+            }
+            if ([int]$report.automation_scheduler_unresolved_definition_count -ne 0) {
+                throw "Local automation scheduler is missing $($report.automation_scheduler_unresolved_definition_count) shared automation definition(s)."
+            }
+        }
+        if (Test-Path -LiteralPath $AutomationRunStatusRepair -PathType Leaf) {
+            Remove-Item -LiteralPath $AutomationRunStatusRepair -Force
+        }
         Add-Member -InputObject $report -NotePropertyName status -NotePropertyValue "reconciled" -Force
         return $report
     } finally {
@@ -507,8 +567,13 @@ function Repair-ThreadCatalog {
 
 function Write-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$Mode, $ThreadCatalogReport) {
     Ensure-Dir $LocalStateRoot
+    $automationDatabase = if ($ThreadCatalogReport -and $ThreadCatalogReport.automation_scheduler_database) {
+        [string]$ThreadCatalogReport.automation_scheduler_database
+    } else {
+        Get-AutomationStateDatabase
+    }
     $payload = [ordered]@{
-        schema_version = 2
+        schema_version = 3
         device = [string]$env:COMPUTERNAME
         mode = $Mode
         completed_at = [DateTimeOffset]::UtcNow.ToString("o")
@@ -524,6 +589,15 @@ function Write-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$Mode, 
         automation_history_path_repaired_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_history_path_repaired_count } else { 0 }
         automation_history_conflict_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.rollout_conflict_count } else { 0 }
         automation_history_unresolved_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_history_unresolved_count } else { 0 }
+        automation_scheduler_status = if ($ThreadCatalogReport) { [string]$ThreadCatalogReport.automation_scheduler_status } else { "not-requested" }
+        automation_scheduler_runs = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_scheduler_runs } else { 0 }
+        automation_scheduler_runs_cataloged = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_scheduler_runs_cataloged } else { 0 }
+        automation_scheduler_runs_inserted_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_scheduler_runs_inserted_count } else { 0 }
+        automation_scheduler_pending_repaired_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_scheduler_pending_repaired_count } else { 0 }
+        automation_scheduler_watermarks_advanced_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_scheduler_watermarks_advanced_count } else { 0 }
+        automation_scheduler_unresolved_definition_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_scheduler_unresolved_definition_count } else { 0 }
+        automation_scheduler_database = if ($automationDatabase) { $automationDatabase } else { $null }
+        automation_scheduler_database_sha256 = Get-FullHashOrMissing $automationDatabase
         thread_catalog_corrupt_rollout_copy_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.corrupt_rollout_copy_count } else { 0 }
         thread_catalog_database_sha256 = Get-FullHashOrMissing $ThreadCatalogDatabase
         organization_sha256 = (Get-FileHash -LiteralPath $BaseState -Algorithm SHA256).Hash

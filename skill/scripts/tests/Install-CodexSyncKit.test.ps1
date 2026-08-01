@@ -39,8 +39,23 @@ function Invoke-Bootstrap([string[]]$Arguments) {
     }
 }
 
-$repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
-$script:Installer = Join-Path $repoRoot "Install-CodexSyncKit.ps1"
+function Find-BootstrapInstaller([string]$StartPath) {
+    $current = [IO.DirectoryInfo]::new([IO.Path]::GetFullPath($StartPath))
+    while ($null -ne $current) {
+        foreach ($candidate in @(
+            (Join-Path $current.FullName "Install-CodexSyncKit.ps1"),
+            (Join-Path $current.FullName "open-source\codex-synckit\Install-CodexSyncKit.ps1")
+        )) {
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                return $candidate
+            }
+        }
+        $current = $current.Parent
+    }
+    throw "Could not locate Install-CodexSyncKit.ps1 from $StartPath."
+}
+
+$script:Installer = Find-BootstrapInstaller $PSScriptRoot
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ("codex-synckit-bootstrap-" + [guid]::NewGuid().ToString("N"))
 $profileRoot = Join-Path $testRoot "profile"
 $existingKit = Join-Path $testRoot "OneDrive\CodexKit"

@@ -7,9 +7,13 @@ $ErrorActionPreference = "Stop"
 $sourceScripts = Split-Path -Parent $PSScriptRoot
 $sourceKitRoot = (Resolve-Path -LiteralPath (Join-Path $sourceScripts "..\..\..\..")).Path
 $publicSourceRoot = (Resolve-Path -LiteralPath (Join-Path $sourceScripts "..\..")).Path
-$nodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
-if (-not $nodeCommand) { $nodeCommand = Get-Command node -ErrorAction Stop }
-$node = $nodeCommand.Source
+if ($env:CODEXKIT_NODE_EXE -and (Test-Path -LiteralPath $env:CODEXKIT_NODE_EXE -PathType Leaf)) {
+    $node = (Resolve-Path -LiteralPath $env:CODEXKIT_NODE_EXE).Path
+} else {
+    $nodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
+    if (-not $nodeCommand) { $nodeCommand = Get-Command node -ErrorAction Stop }
+    $node = $nodeCommand.Source
+}
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) "codexkit-sync-tests-$PID-$([guid]::NewGuid().ToString('N'))"
 
 function Assert-True([bool]$Condition, [string]$Message) {
@@ -154,20 +158,27 @@ End If
     $catalogRollout = Join-Path $catalogSessions "rollout-2026-07-21T00-00-00-$catalogTask.jsonl"
     $catalogMeta = [ordered]@{ timestamp = "2026-07-21T00:00:00Z"; type = "session_meta"; payload = [ordered]@{ id = $catalogTask; session_id = $catalogTask; timestamp = "2026-07-21T00:00:00Z"; cwd = "C:\workspace"; source = "vscode"; thread_source = "automation"; model_provider = "openai"; cli_version = "test" } }
     $catalogAutomation = [ordered]@{ timestamp = "2026-07-21T00:00:01Z"; type = "response_item"; payload = [ordered]@{ type = "message"; role = "developer"; content = @([ordered]@{ type = "input_text"; text = "Automation ID: integration-monitor" }) } }
-    $catalogRows = @($catalogMeta,$catalogAutomation) | ForEach-Object { $_ | ConvertTo-Json -Depth 10 -Compress }
+    $catalogUser = [ordered]@{ timestamp = "2026-07-21T00:00:02Z"; type = "response_item"; payload = [ordered]@{ type = "message"; role = "user"; content = @([ordered]@{ type = "input_text"; text = "Automation: Integration monitor`nAutomation ID: integration-monitor" }) } }
+    $catalogComplete = [ordered]@{ timestamp = "2026-07-21T00:00:03Z"; type = "event_msg"; payload = [ordered]@{ type = "task_complete" } }
+    $catalogRows = @($catalogMeta,$catalogAutomation,$catalogUser,$catalogComplete) | ForEach-Object { $_ | ConvertTo-Json -Depth 10 -Compress }
     [IO.File]::WriteAllText($catalogRollout, (($catalogRows -join "`n") + "`n"), (New-Object Text.UTF8Encoding($false)))
     $catalogIndex = [ordered]@{ id = $catalogTask; thread_name = "Catalog imported automation run"; updated_at = "2026-07-21T00:00:00Z" }
     [IO.File]::WriteAllText((Join-Path $catalog.Kit "session-data\session_index.jsonl"), (($catalogIndex | ConvertTo-Json -Compress) + "`n"), (New-Object Text.UTF8Encoding($false)))
     $catalogDb = Join-Path $catalog.Profile ".codex\state_5.sqlite"
+    $catalogAutomationDb = Join-Path $catalog.Profile ".codex\sqlite\codex-dev.db"
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $catalogAutomationDb) | Out-Null
     $createCatalogDb = @'
 const {DatabaseSync}=require('node:sqlite');
 const db=new DatabaseSync(process.argv[2]);
 db.exec("CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, source TEXT NOT NULL, model_provider TEXT NOT NULL, cwd TEXT NOT NULL, title TEXT NOT NULL, sandbox_policy TEXT NOT NULL, approval_mode TEXT NOT NULL, tokens_used INTEGER NOT NULL DEFAULT 0, has_user_event INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0, archived_at INTEGER, cli_version TEXT NOT NULL DEFAULT '', first_user_message TEXT NOT NULL DEFAULT '', memory_mode TEXT NOT NULL DEFAULT 'enabled', preview TEXT NOT NULL DEFAULT '', recency_at INTEGER NOT NULL DEFAULT 0, history_mode TEXT NOT NULL DEFAULT 'legacy', thread_source TEXT)");
 db.close();
+const scheduler=new DatabaseSync(process.argv[3]);
+scheduler.exec("CREATE TABLE automations (id TEXT PRIMARY KEY, name TEXT NOT NULL, prompt TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'ACTIVE', next_run_at INTEGER, last_run_at INTEGER, cwds TEXT NOT NULL DEFAULT '[]', rrule TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL); CREATE TABLE automation_runs (thread_id TEXT PRIMARY KEY, automation_id TEXT NOT NULL, status TEXT NOT NULL, read_at INTEGER, thread_title TEXT, source_cwd TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL); INSERT INTO automations (id,name,prompt,status,next_run_at,last_run_at,cwds,rrule,created_at,updated_at) VALUES ('integration-monitor','Integration monitor','prompt','ACTIVE',9999999999999,NULL,'[]','FREQ=WEEKLY;BYDAY=MO',1,1)");
+scheduler.close();
 '@
     $createCatalogDbScript = Join-Path $catalog.Root "create-catalog-db.cjs"
     [IO.File]::WriteAllText($createCatalogDbScript, $createCatalogDb, (New-Object Text.UTF8Encoding($false)))
-    & $node --no-warnings $createCatalogDbScript $catalogDb
+    & $node --no-warnings $createCatalogDbScript $catalogDb $catalogAutomationDb
     if ($LASTEXITCODE -ne 0) { throw "Could not create catalog integration fixture" }
     Invoke-StateSync $catalog "Pull"
     $readCatalogDb = @'
@@ -185,6 +196,20 @@ if(!row || row.title!=='Catalog imported automation run' || row.thread_source!==
     Assert-True ($catalogReceipt.thread_catalog_status -eq "reconciled" -and $catalogReceipt.thread_catalog_inserted_count -eq 1) "Pull receipt did not verify the repaired thread catalog"
     Assert-True ($catalogReceipt.automation_history_rollouts -eq 1 -and $catalogReceipt.automation_history_cataloged -eq 1) "Pull receipt did not verify automation history coverage"
     Assert-True ($catalogReceipt.automation_history_inserted_count -eq 1 -and $catalogReceipt.automation_history_unresolved_count -eq 0) "Pull receipt did not record the merged automation run"
+    Assert-True ($catalogReceipt.automation_scheduler_status -eq "reconciled" -and $catalogReceipt.automation_scheduler_runs_cataloged -eq 1) "Pull receipt did not verify local scheduler coverage"
+    Assert-True ($catalogReceipt.automation_scheduler_runs_inserted_count -eq 1 -and $catalogReceipt.automation_scheduler_watermarks_advanced_count -eq 1) "Pull did not import the remote run and advance its local last-run watermark"
+    $readSchedulerDb = @'
+const {DatabaseSync}=require('node:sqlite');
+const db=new DatabaseSync(process.argv[2],{readOnly:true});
+const run=db.prepare('SELECT automation_id,status FROM automation_runs WHERE thread_id=?').get(process.argv[3]);
+const automation=db.prepare('SELECT last_run_at,next_run_at FROM automations WHERE id=?').get('integration-monitor');
+db.close();
+if(!run || run.automation_id!=='integration-monitor' || run.status!=='ARCHIVED' || !automation || automation.last_run_at!==Date.parse('2026-07-21T00:00:00Z') || automation.next_run_at!==null) process.exit(8);
+'@
+    $readSchedulerDbScript = Join-Path $catalog.Root "read-scheduler-db.cjs"
+    [IO.File]::WriteAllText($readSchedulerDbScript, $readSchedulerDb, (New-Object Text.UTF8Encoding($false)))
+    & $node --no-warnings $readSchedulerDbScript $catalogAutomationDb $catalogTask
+    Assert-True ($LASTEXITCODE -eq 0) "Pull did not reconcile the remote run into the local scheduler database"
     $oldProfile = $env:USERPROFILE
     $oldNode = $env:CODEXKIT_NODE_EXE
     $oldDesktop = $env:CODEX_DESKTOP_EXE

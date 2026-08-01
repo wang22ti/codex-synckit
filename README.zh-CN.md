@@ -31,8 +31,8 @@ Codex/ChatGPT 桌面应用或 Codex CLI，以及用于桌面状态辅助工具�
 运行环境。
 
 1. 下载并解压
-   [`codex-synckit-0.1.0-alpha.zip`](https://github.com/wang22ti/codex-synckit/releases/download/v0.1.0-alpha/codex-synckit-0.1.0-alpha.zip)。
-   Alpha 限制和校验信息见[发布说明](https://github.com/wang22ti/codex-synckit/releases/tag/v0.1.0-alpha)。
+   [`codex-synckit-0.2.0-alpha.zip`](https://github.com/wang22ti/codex-synckit/releases/download/v0.2.0-alpha/codex-synckit-0.2.0-alpha.zip)。
+   Alpha 限制和校验信息见[发布说明](https://github.com/wang22ti/codex-synckit/releases/tag/v0.2.0-alpha)。
 2. 双击 `Install-CodexSyncKit.cmd` 启动安装。
 
 默认安装包含完整会话和侧栏组织，因此生成的 OneDrive `CodexKit` 目录应保持私有；
@@ -96,11 +96,11 @@ OneDrive 私有同步包中的位置。
 | 会话历史 | 开启 | `.codex\sessions`、`.codex\archived_sessions`、`.codex\session_index.jsonl` → `CodexKit\session-data` | 完整的当前及归档对话和标题索引，让另一台电脑能够重新打开并继续 |
 | 侧栏和项目分组 | 开启 | `.codex\.codex-global-state.json` 中可跨设备使用的字段 → `CodexKit\desktop-state` | 任务标题、项目分组、任务属于哪个项目、描述、置顶和排序；**不包含项目的实际文件** |
 | 项目工作区文件 | 开启 | `Documents\Codex` ⇄ `CodexKit\CodexProjects` | 托管启动前拉取、退出后推送；本机目录保持为 Codex 要求的真实目录，同步源代码、文档、`.git`、`.agents` 和项目级 `.codex` 设置 |
-| Codex 自动化 | 可选 | `.codex\automations` → `CodexKit\automations` | `automation.toml` 等自动化定义及其 `memory.md`；同一个共享计划只应由一台指定电脑执行 |
+| Codex 自动化 | 可选 | `.codex\automations` → `CodexKit\automations` | 定义和记忆共享；Managed Pull 会把已完成运行的水位导入本机调度器，因此当前唯一在用的电脑会执行下一次真正到期的任务 |
 | 设备环境清单 | 开启 | 扫描当前电脑 → `CodexKit\environment\devices\<电脑名>.json` | 记录已安装工具及版本，用于比较电脑差异；不会安装或复制应用程序 |
 | 插件清单 | 开启 | 读取 `.codex\plugins\cache` 中的名称和版本 → `CodexKit\plugins\inventory.json` | 用于提示另一台电脑缺少哪些插件；不会复制插件程序和缓存 |
 | 脱敏配置快照 | 只记录，不自动应用 | `.codex\config.toml`、`*.config.toml` → `CodexKit\profiles` | 删除疑似密钥后的参考副本；模型、推理等级、功能开关、信任设置等实际偏好仍由每台电脑自行选择 |
-| 凭据和仅限本机的运行状态 | 永不同步 | 不复制到 OneDrive | `auth.json`、`.codex\rules`、`state_5.sqlite`、Codex 日志、缓存、沙箱数据、信任记录、SSH 密钥、`.env` 和疑似密钥或令牌文件都留在本机 |
+| 凭据和仅限本机的运行状态 | 永不同步 | 不复制到 OneDrive | `auth.json`、`.codex\rules`、`state_5.sqlite`、`.codex\sqlite\codex*.db`、Codex 日志、缓存、沙箱数据、信任记录、SSH 密钥、`.env` 和疑似密钥或令牌文件都留在本机 |
 
 **补充说明**
 
@@ -112,6 +112,11 @@ OneDrive 私有同步包中的位置。
   - “侧栏和项目分组”同步项目和任务在 ChatGPT 中的显示与组织。
   - “项目工作区文件”同步硬盘上的真实文件夹和文件。
   - 共享状态中的默认工作区路径以可移植形式保存，拉取后再转换为当前电脑的本机路径。
+- **自动化**
+  - 同一时间只在一台电脑上使用 Managed ChatGPT；换机前先关闭，并等待 OneDrive 同步完成。
+  - Managed Pull 会事务性导入缺少的共享运行记录，只根据已完成 rollout 推进较旧的本机 `last_run_at`；本机调度数据库本身从不复制。
+  - 从其他电脑导入的已完成运行会直接归档，不会制造新的未读提醒。已删除或已替换定义的历史记录不会阻止启动；只有当前仍共享、但本机调度器缺少的定义才算未解决。
+  - 每台电脑在启用自动化同步前都应至少打开并关闭一次 ChatGPT。缺少调度数据库结构或当前定义时，Managed 启动会停止，而不是以 `Last run: never` 重复执行。
 - **隐私**
   - 会话历史、记忆、侧栏组织、环境报告和配置快照可能包含提示词、回答、长期事实、项目名称、软件信息和本地路径。
   - 请保持生成的 `CodexKit` 目录为私有目录，并阅读[隐私说明](docs/PRIVACY.md)了解数据边界。
@@ -162,7 +167,7 @@ Bug。按照以下规则顺序使用各台电脑，并依靠工具提供的备�
 - 不要在两台电脑上同时操作同一个已同步会话。
 - 同一时间只运行一个托管 ChatGPT，并等待关闭后的同步完成。
 - 不要公开或分享生成的私有 `CodexKit` 目录。
-- 不要手工复制或链接凭据、命令审批规则、`state_5.sqlite`、缓存或日志。
+- 不要手工复制或链接凭据、命令审批规则、`state_5.sqlite`、`.codex\sqlite\codex*.db`、缓存或日志。
 - 如果出现 OneDrive 冲突副本或旧的“其他设备正在运行”警告，应先停止操作，
   确认哪台电脑拥有最新状态。
 

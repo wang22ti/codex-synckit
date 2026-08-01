@@ -3096,7 +3096,19 @@ complete extension, and two valid divergent transcripts with the same thread
 ID stop before catalog mutation. A corrupt OneDrive conflict copy is ignored
 only when a valid copy exists, with device-local diagnostics. Managed Pull
 reports automation runs cataloged, inserted, path-repaired, conflicted, and
-unresolved in its receipt.
+unresolved in its receipt. While ChatGPT is closed, it also imports missing
+runs into the current device's local `.codex\sqlite\codex*.db`, advances an
+older `last_run_at` only from a completed shared rollout, clears `next_run_at`
+for desktop-side recomputation, and hashes the scheduler database in the
+launch receipt. This lets whichever single machine is currently in use execute
+the next genuinely due run without repeating a completed run from another
+machine. Imported completed runs are archived locally instead of creating new
+unread notifications. Runs for deleted/replaced definitions remain in history
+but do not block startup; only a currently shared definition missing from the
+local scheduler is unresolved. Never copy or live-link either SQLite database. Open and close ChatGPT
+once on every device before enabling automation synchronization so the local
+scheduler schema exists; a missing schema or current matching definition blocks
+Managed launch instead of starting with `Last run: never`.
 
 Synchronization also checks for catastrophic state loss before installing a merge. If a file suddenly shrinks to a small shell or loses workspace/task markers and thread references, synchronization is blocked and the candidate is copied to the device-local `%USERPROFILE%\.local\state\codexkit\desktop-state-quarantine` folder. OneDrive keeps only the shared `desktop-state\.codex-global-state.json`, one timestamped backup, and the small advisory `desktop-state\codex-running.json`; conflict reports are device-local as well.
 

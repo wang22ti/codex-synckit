@@ -38,8 +38,8 @@ The optional memory subsystem's Bash maintenance tools require Git for Windows
 or another compatible Bash runtime.
 
 1. Download and extract
-   [`codex-synckit-0.1.0-alpha.zip`](https://github.com/wang22ti/codex-synckit/releases/download/v0.1.0-alpha/codex-synckit-0.1.0-alpha.zip).
-   See the [release notes](https://github.com/wang22ti/codex-synckit/releases/tag/v0.1.0-alpha)
+   [`codex-synckit-0.2.0-alpha.zip`](https://github.com/wang22ti/codex-synckit/releases/download/v0.2.0-alpha/codex-synckit-0.2.0-alpha.zip).
+   See the [release notes](https://github.com/wang22ti/codex-synckit/releases/tag/v0.2.0-alpha)
    for Alpha limitations and verification details.
 2. Double-click `Install-CodexSyncKit.cmd` to start setup.
 
@@ -116,11 +116,11 @@ In the paths below, `%USERPROFILE%` is the current Windows user folder and
 | Conversation history | On | `.codex\sessions`, `.codex\archived_sessions`, `.codex\session_index.jsonl` → `CodexKit\session-data` | Complete active and archived conversations plus their title index, so another PC can reopen them |
 | Sidebar and project organization | On | Portable fields from `.codex\.codex-global-state.json` → `CodexKit\desktop-state` | Task titles, project groups, task-to-project assignments, descriptions, pins, and ordering; **not the actual project files** |
 | Project workspace files | On | `Documents\Codex` ⇄ `CodexKit\CodexProjects` | Pulled before managed launch and pushed after exit; the local path remains a real directory as Codex requires, while source, documents, `.git`, `.agents`, and project-level `.codex` settings synchronize |
-| Codex automations | Optional | `.codex\automations` → `CodexKit\automations` | Automation definitions such as `automation.toml` and their `memory.md`; only one designated PC should execute a shared schedule |
+| Codex automations | Optional | `.codex\automations` → `CodexKit\automations` | Definitions and memory are shared; Managed Pull imports completed run watermarks into the local scheduler so whichever single PC is currently in use executes the next genuinely due run |
 | Device environment inventory | On | Current PC scan → `CodexKit\environment\devices\<computer>.json` | A report of installed tools and versions for comparing PCs; it does not install or copy applications |
 | Plugin inventory | On | Names and versions found under `.codex\plugins\cache` → `CodexKit\plugins\inventory.json` | A list used to report missing plugins on another PC; plugin programs and caches are not copied |
 | Sanitized configuration snapshot | Recorded, not applied | `.codex\config.toml` and `*.config.toml` → `CodexKit\profiles` | A reference copy with likely secrets redacted; model choice, reasoning level, features, trust, and other live preferences remain selected locally |
-| Credentials and device-only runtime state | Never | Not copied to OneDrive | `auth.json`, `.codex\rules`, `state_5.sqlite`, Codex logs, caches, sandbox data, trust hashes, SSH keys, `.env` files, and likely secret/token files remain local |
+| Credentials and device-only runtime state | Never | Not copied to OneDrive | `auth.json`, `.codex\rules`, `state_5.sqlite`, `.codex\sqlite\codex*.db`, Codex logs, caches, sandbox data, trust hashes, SSH keys, `.env` files, and likely secret/token files remain local |
 
 **Additional notes**
 
@@ -132,6 +132,11 @@ In the paths below, `%USERPROFILE%` is the current Windows user folder and
   - “Sidebar and project organization” synchronizes how projects and tasks appear and are organized in ChatGPT.
   - “Project workspace files” synchronizes the real folders and files stored on disk.
   - Default workspace paths are stored portably in shared state and localized to the current PC during Pull.
+- **Automations**
+  - Use Managed ChatGPT on only one PC at a time, close it before switching, and wait for OneDrive.
+  - Managed Pull transactionally imports missing shared run rows and advances only older local `last_run_at` values from completed rollouts; the local scheduler database itself is never copied.
+  - Completed cross-device imports are archived instead of becoming unread notifications. History for a deleted/replaced definition does not block startup; only a currently shared definition missing from the local scheduler is unresolved.
+  - Open and close ChatGPT once on every PC before enabling automation synchronization. Missing scheduler schema or a current definition stops Managed launch instead of allowing duplicate `Last run: never` execution.
 - **Privacy**
   - Conversation history, memory, sidebar organization, environment reports, and configuration snapshots may contain prompts, responses, learned facts, project names, software details, and local paths.
   - Keep the generated `CodexKit` directory private and see [Privacy](docs/PRIVACY.md) for the data boundary.
@@ -190,7 +195,7 @@ data should still have an independent backup.
   synchronization finish.
 - Never publish or share the generated private `CodexKit` directory.
 - Do not manually copy or link credentials, command approvals,
-  `state_5.sqlite`, caches, or logs.
+  `state_5.sqlite`, `.codex\sqlite\codex*.db`, caches, or logs.
 - Treat OneDrive conflict copies or a stale running-device warning as a signal
   to stop and verify which PC has the newest state.
 
