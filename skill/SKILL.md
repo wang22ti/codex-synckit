@@ -89,9 +89,26 @@ The merge uses the same preflight, SHA-256 verification, backup, and rollback
 rules as project migration. Same-path `automation.toml` or `memory.md`
 differences are conflicts. If the shared tree already has `.run-jitter-salt`,
 the local salt is ignored and remains only in the rollback backup. Never link
-or copy `.codex\state_5.sqlite`. Once enabled, `-Repair` preserves the automation
-link. Only one machine should run Managed ChatGPT at a time to avoid duplicate
-execution of a shared schedule.
+or copy `.codex\state_5.sqlite` or `.codex\sqlite\codex*.db`. Once enabled,
+`-Repair` preserves the automation link. Use Managed ChatGPT on only one
+machine at a time. After the previous machine closes and OneDrive finishes,
+the next machine's Managed Pull imports shared automation-run rows into its
+local scheduler database, advances only older `last_run_at` watermarks from
+completed rollouts, clears the corresponding `next_run_at` so the desktop app
+recomputes the next future occurrence, and then launches ChatGPT. The machine
+currently in use therefore executes the next genuinely due run without
+repeating a run completed elsewhere. Completed runs imported from another
+machine are inserted as `ARCHIVED`, so historical synchronization does not
+create unread notifications on the current device. Historical runs belonging
+to a deleted or replaced automation definition remain available in task
+history but do not block startup; only a currently shared definition that is
+missing from the local scheduler is treated as unresolved.
+
+Every machine must have opened and closed ChatGPT at least once before
+automation synchronization is enabled so its local `codex.db` or
+`codex-dev.db` schema exists. If shared automation history exists but the local
+scheduler database, tables, or matching definition is missing, Managed launch
+fails closed instead of starting with `Last run: never`.
 
 Codex automations do not replace the Windows memory-maintenance task. Keep that
 Task Scheduler job installed on only the currently designated maintenance
@@ -209,7 +226,9 @@ Confirm:
   baseline file counts.
 - when automation synchronization is enabled, `.codex\automations` is a
   directory link targeting `CodexKit\automations`; `.codex\state_5.sqlite`
-  remains local.
+  and `.codex\sqlite\codex*.db` remain local. The latest Managed Pull receipt
+  must report complete automation scheduler coverage, zero unresolved
+  definitions, and a verified scheduler-database hash.
 - The user-visible shortcut is named `ChatGPT` and targets `Start-CodexManaged.vbs` on every machine. The shortcut uses the current Appx `ChatGPT.exe` icon, Managed mode is recorded in `installation.json`, and no stale CodexKit-managed `Codex.lnk` or mode-labeled shortcut remains.
 
 ## Session Safety
@@ -266,7 +285,15 @@ device-local diagnostic retained. Managed Pull extracts `Automation ID`,
 registers every indexed automation run, repairs only missing/stale local
 automation rollout paths, and records automation coverage, insertions, path
 repairs, corrupt copies, conflicts, and unresolved runs in the launch receipt.
-Do not concatenate divergent JSONL suffixes or silently choose a branch.
+It also transactionally inserts missing rows into the device-local
+`automation_runs` table. For each Automation ID, only a rollout ending in
+`task_complete` may advance the device-local `automations.last_run_at`;
+`next_run_at` is then cleared so the desktop app recomputes the next future
+occurrence from the shared definition. Existing newer watermarks and existing
+run rows are preserved. The receipt hashes both local SQLite databases and the
+launcher rechecks them immediately before opening ChatGPT. Do not concatenate
+divergent JSONL suffixes, silently choose a branch, or copy either database
+between machines.
 
 The desktop launcher must discover packaged builds from their Appx manifest and the registered `codex` protocol instead of assuming a fixed executable name. Current builds may retain the `OpenAI.Codex` package identity while declaring `app\ChatGPT.exe` as the desktop entry point; older builds used `Codex.exe`. Process monitoring must follow the resolved manifest executable and must exclude the bundled CLI at `app\resources\codex.exe`.
 

@@ -36,6 +36,29 @@ function writeReport(reportPath, report) {
   fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 }
 
+function loadAutomationDefinitionIds(root) {
+  const ids = new Set();
+  if (!root || !fs.existsSync(root)) return ids;
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const definitionPath = path.join(root, entry.name, "automation.toml");
+    if (!fs.existsSync(definitionPath)) continue;
+    const definition = fs.readFileSync(definitionPath, "utf8");
+    const match = definition.match(/^id\s*=\s*["']([^"']+)["']/m);
+    ids.add((match?.[1] || entry.name).trim());
+  }
+  return ids;
+}
+
+function loadRunStatusRepairIds(repairPath) {
+  if (!repairPath || !fs.existsSync(repairPath)) return new Set();
+  const payload = JSON.parse(fs.readFileSync(repairPath, "utf8"));
+  if (!Array.isArray(payload.thread_ids)) {
+    throw new Error(`Automation run status repair file has no thread_ids array: ${repairPath}`);
+  }
+  return new Set(payload.thread_ids.filter((value) => typeof value === "string" && value));
+}
+
 async function loadTitleIndex(indexPath) {
   const latest = new Map();
   if (!fs.existsSync(indexPath)) return latest;
@@ -225,6 +248,34 @@ function findAutomationId(text) {
   return null;
 }
 
+function inspectAutomationTerminalEvent(filePath) {
+  const handle = fs.openSync(filePath, "r");
+  try {
+    const stat = fs.fstatSync(handle);
+    const tailSize = Math.min(stat.size, 2 * 1024 * 1024);
+    const buffer = Buffer.allocUnsafe(tailSize);
+    fs.readSync(handle, buffer, 0, tailSize, stat.size - tailSize);
+    const lines = buffer.toString("utf8").split(/\r?\n/);
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const line = lines[index].trim();
+      if (!line) continue;
+      try {
+        const row = JSON.parse(line);
+        if (row.type !== "event_msg" || row.payload?.type !== "task_complete") continue;
+        return {
+          completed: true,
+          completedAtMs: parseTime(row.timestamp, stat.mtimeMs),
+        };
+      } catch {
+        // The first tail line can be a partial JSON row.
+      }
+    }
+    return { completed: false, completedAtMs: null };
+  } finally {
+    fs.closeSync(handle);
+  }
+}
+
 async function loadRolloutMetadata(filePath, indexedTitle) {
   const stat = fs.statSync(filePath);
   const input = fs.createReadStream(filePath, { encoding: "utf8" });
@@ -271,6 +322,11 @@ async function loadRolloutMetadata(filePath, indexedTitle) {
   const createdMs = parseTime(meta.timestamp, stat.birthtimeMs || stat.mtimeMs);
   const updatedMs = Math.max(createdMs, stat.mtimeMs);
   const title = indexedTitle || firstUserMessage || "Untitled task";
+  const threadSource = asText(meta.thread_source, "user");
+  const terminal =
+    threadSource === "automation"
+      ? inspectAutomationTerminalEvent(filePath)
+      : { completed: false, completedAtMs: null };
   return {
     id,
     rollout_path: path.resolve(filePath),
@@ -297,12 +353,14 @@ async function loadRolloutMetadata(filePath, indexedTitle) {
     agent_path: null,
     created_at_ms: Math.floor(createdMs),
     updated_at_ms: Math.floor(updatedMs),
-    thread_source: asText(meta.thread_source, "user"),
+    thread_source: threadSource,
     preview: firstUserMessage || title,
     recency_at: Math.floor(updatedMs / 1000),
     recency_at_ms: Math.floor(updatedMs),
     history_mode: "legacy",
     automation_id: automationId,
+    automation_completed: terminal.completed,
+    automation_completed_at_ms: terminal.completedAtMs,
     input_size: stat.size,
     input_mtime_ms: stat.mtimeMs,
   };
@@ -380,8 +438,168 @@ function summarizeAutomationHistory(automationRows, database) {
   };
 }
 
+function emptyAutomationSchedulerReport(status, databasePath = null) {
+  return {
+    automation_scheduler_status: status,
+    automation_scheduler_database: databasePath ? path.resolve(databasePath) : null,
+    automation_scheduler_runs: 0,
+    automation_scheduler_runs_cataloged: 0,
+    automation_scheduler_runs_inserted_count: 0,
+    automation_scheduler_pending_repaired_count: 0,
+    automation_scheduler_watermarks_advanced_count: 0,
+    automation_scheduler_incomplete_run_count: 0,
+    automation_scheduler_unknown_id_count: 0,
+    automation_scheduler_unresolved_definition_count: 0,
+    automation_scheduler_unresolved_definitions: [],
+  };
+}
+
+function reconcileAutomationScheduler(
+  databasePath,
+  automationRows,
+  rolloutUnion,
+  sharedDefinitionIds,
+  runStatusRepairIds,
+) {
+  const knownRows = [...automationRows.values()].filter((row) => row.automation_id);
+  const latestCompleted = new Map();
+  for (const row of knownRows) {
+    if (!row.automation_completed) continue;
+    const previous = latestCompleted.get(row.automation_id);
+    if (!previous || row.created_at_ms > previous.created_at_ms) {
+      latestCompleted.set(row.automation_id, row);
+    }
+  }
+  const base = {
+    ...emptyAutomationSchedulerReport(
+      databasePath && fs.existsSync(databasePath) ? "pending" : "database-missing",
+      databasePath,
+    ),
+    automation_scheduler_runs: knownRows.length,
+    automation_scheduler_incomplete_run_count: knownRows.filter((row) => !row.automation_completed).length,
+    automation_scheduler_unknown_id_count: automationRows.size - knownRows.length,
+  };
+  if (!databasePath || !fs.existsSync(databasePath)) {
+    return {
+      ...base,
+      automation_scheduler_unresolved_definition_count: latestCompleted.size,
+      automation_scheduler_unresolved_definitions: [...latestCompleted.keys()].sort(),
+    };
+  }
+
+  const database = new DatabaseSync(databasePath, { timeout: 5000 });
+  const inserted = [];
+  const advanced = [];
+  const repairedPending = [];
+  try {
+    const quickCheck = database.prepare("PRAGMA quick_check").get();
+    if (!quickCheck || Object.values(quickCheck)[0] !== "ok") {
+      throw new Error("Automation scheduler SQLite quick_check did not return ok");
+    }
+    const tables = new Set(
+      database
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('automations','automation_runs')")
+        .all()
+        .map((row) => row.name),
+    );
+    if (!tables.has("automations") || !tables.has("automation_runs")) {
+      return {
+        ...base,
+        automation_scheduler_status: "schema-missing",
+        automation_scheduler_unresolved_definition_count: latestCompleted.size,
+        automation_scheduler_unresolved_definitions: [...latestCompleted.keys()].sort(),
+      };
+    }
+
+    const definitions = new Map(
+      database
+        .prepare("SELECT id, last_run_at AS lastRunAt FROM automations")
+        .all()
+        .map((row) => [row.id, row]),
+    );
+    const unresolvedDefinitions = [...sharedDefinitionIds]
+      .filter((automationId) => latestCompleted.has(automationId) && !definitions.has(automationId))
+      .sort();
+
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      const insertRun = database.prepare(`
+        INSERT OR IGNORE INTO automation_runs
+          (thread_id, automation_id, status, thread_title, source_cwd, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const row of knownRows) {
+        const rollout = rolloutUnion.get(row.id);
+        // Cross-device imports are historical context, not new notifications
+        // on this device. Existing native rows are preserved by INSERT OR IGNORE.
+        const status = row.automation_completed || rollout?.archived ? "ARCHIVED" : "IN_PROGRESS";
+        const changes = insertRun.run(
+          row.id,
+          row.automation_id,
+          status,
+          row.title,
+          row.cwd,
+          row.created_at_ms,
+          row.automation_completed_at_ms ?? row.updated_at_ms,
+        ).changes;
+        if (changes === 1) inserted.push(row.id);
+      }
+
+      const repairPending = database.prepare(`
+        UPDATE automation_runs
+        SET status = 'ARCHIVED', read_at = COALESCE(read_at, ?)
+        WHERE thread_id = ? AND status = 'PENDING_REVIEW'
+      `);
+      const repairedAt = Date.now();
+      for (const threadId of runStatusRepairIds) {
+        const changes = repairPending.run(repairedAt, threadId).changes;
+        if (changes === 1) repairedPending.push(threadId);
+      }
+
+      const advanceWatermark = database.prepare(
+        "UPDATE automations SET last_run_at=?, next_run_at=NULL WHERE id=? AND (last_run_at IS NULL OR last_run_at < ?)",
+      );
+      for (const [automationId, row] of latestCompleted) {
+        if (!definitions.has(automationId)) continue;
+        const changes = advanceWatermark.run(row.created_at_ms, automationId, row.created_at_ms).changes;
+        if (changes === 1) advanced.push({ automation_id: automationId, last_run_at: row.created_at_ms });
+      }
+      database.exec("COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
+    database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+
+    const cataloged = database
+      .prepare(
+        `SELECT count(*) AS total
+         FROM automation_runs
+         WHERE thread_id IN (${knownRows.map(() => "?").join(",") || "NULL"})`,
+      )
+      .get(...knownRows.map((row) => row.id)).total;
+    return {
+      ...base,
+      automation_scheduler_status: unresolvedDefinitions.length ? "unresolved-definitions" : "reconciled",
+      automation_scheduler_runs_cataloged: Number(cataloged),
+      automation_scheduler_runs_inserted_count: inserted.length,
+      automation_scheduler_runs_inserted: inserted,
+      automation_scheduler_pending_repaired_count: repairedPending.length,
+      automation_scheduler_pending_repaired: repairedPending,
+      automation_scheduler_watermarks_advanced_count: advanced.length,
+      automation_scheduler_watermarks_advanced: advanced,
+      automation_scheduler_unresolved_definition_count: unresolvedDefinitions.length,
+      automation_scheduler_unresolved_definitions: unresolvedDefinitions,
+    };
+  } finally {
+    database.close();
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv);
+  const sharedAutomationDefinitionIds = loadAutomationDefinitionIds(args["automation-root"]);
+  const runStatusRepairIds = loadRunStatusRepairIds(args["automation-run-status-repair"]);
   if (!fs.existsSync(args.database)) throw new Error(`Thread database is missing: ${args.database}`);
   const titles = await loadTitleIndex(args["session-index"]);
   const rolloutGroups = new Map();
@@ -512,6 +730,13 @@ async function main() {
     database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
 
     const automation = summarizeAutomationHistory(automationRows, database);
+    const automationScheduler = reconcileAutomationScheduler(
+      args["automation-database"] || null,
+      automationRows,
+      union.rollouts,
+      sharedAutomationDefinitionIds,
+      runStatusRepairIds,
+    );
     const report = {
       schema_version: 2,
       status: "reconciled",
@@ -538,12 +763,15 @@ async function main() {
       automation_history_unknown_id_count: automation.unknownIds,
       automation_history_unresolved_count: automation.unresolved,
       automation_histories: automation.byAutomation,
+      ...automationScheduler,
       database: path.resolve(args.database),
     };
     writeReport(args["report-output"], report);
     console.log(
       `Thread catalog reconciled: ${inserted.length} missing task(s) registered; ` +
-        `${automation.total} automation run(s) unioned, ${automationPathRepairs.length} stale path(s) repaired.`,
+        `${automation.total} automation run(s) unioned, ${automationPathRepairs.length} stale path(s) repaired; ` +
+        `${automationScheduler.automation_scheduler_runs_inserted_count} scheduler run(s) imported, ` +
+        `${automationScheduler.automation_scheduler_watermarks_advanced_count} last-run watermark(s) advanced.`,
     );
   } finally {
     database.close();

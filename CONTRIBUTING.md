@@ -21,7 +21,7 @@ Git is used by contributors only. It is not an end-user requirement.
 Never use a real generated CodexKit as a pull-request fixture.
 
 Maintainers publish a release by pushing a version tag such as
-`v0.1.0-alpha`. The release workflow rebuilds and rescans the ZIP before
+`v0.2.0-alpha`. The release workflow rebuilds and rescans the ZIP before
 creating the GitHub Release; do not upload an independently assembled archive.
 
 ## Pull requests

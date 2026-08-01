@@ -14,6 +14,7 @@ $DesktopStateScript = Join-Path $ScriptRoot "Sync-CodexDesktopState.ps1"
 $MergeHelper = Join-Path $ScriptRoot "Merge-CodexSidebarState.mjs"
 $ThreadCatalogRepairHelper = Join-Path $ScriptRoot "Repair-CodexThreadCatalog.mjs"
 $ThreadCatalogDatabase = Join-Path $env:USERPROFILE ".codex\state_5.sqlite"
+$AutomationDatabaseRoot = Join-Path $env:USERPROFILE ".codex\sqlite"
 $LocalDesktopState = Join-Path $env:USERPROFILE ".codex\.codex-global-state.json"
 $SharedDesktopState = Join-Path $KitRoot "desktop-state\.codex-global-state.json"
 $OrganizationBaseline = Join-Path $env:USERPROFILE ".local\state\codexkit\desktop-sidebar-merge-base.json"
@@ -104,6 +105,17 @@ function Assert-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$Expec
         if ([int]$receipt.automation_history_cataloged -ne [int]$receipt.automation_history_rollouts) {
             throw "Automation history catalog coverage is incomplete: $($receipt.automation_history_cataloged)/$($receipt.automation_history_rollouts)."
         }
+        if ([int]$receipt.automation_history_rollouts -gt 0) {
+            if ([string]$receipt.automation_scheduler_status -ne "reconciled") {
+                throw "The local automation scheduler was not reconciled from shared run history."
+            }
+            if ([int]$receipt.automation_scheduler_runs_cataloged -ne [int]$receipt.automation_scheduler_runs) {
+                throw "Automation scheduler run coverage is incomplete: $($receipt.automation_scheduler_runs_cataloged)/$($receipt.automation_scheduler_runs)."
+            }
+            if ([int]$receipt.automation_scheduler_unresolved_definition_count -ne 0) {
+                throw "The local scheduler is missing $($receipt.automation_scheduler_unresolved_definition_count) shared automation definition(s)."
+            }
+        }
     }
     $expectedCatalogHash = [string]$receipt.thread_catalog_database_sha256
     if ($expectedCatalogHash -eq "missing") {
@@ -120,6 +132,27 @@ function Assert-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$Expec
         }
     } else {
         throw "The desktop sync receipt has an invalid thread catalog hash."
+    }
+    $expectedAutomationHash = [string]$receipt.automation_scheduler_database_sha256
+    $automationDatabase = [string]$receipt.automation_scheduler_database
+    if ($expectedAutomationHash -eq "missing") {
+        $currentAutomationDatabases = @()
+        if (Test-Path -LiteralPath $AutomationDatabaseRoot -PathType Container) {
+            $currentAutomationDatabases = @(Get-ChildItem -LiteralPath $AutomationDatabaseRoot -File -Filter "codex*.db" -ErrorAction SilentlyContinue)
+        }
+        if ($currentAutomationDatabases.Count -gt 0) {
+            throw "The local automation scheduler database appeared after synchronization; retry the managed launch so shared run watermarks can be reconciled."
+        }
+    } elseif ($expectedAutomationHash -match '^[A-Fa-f0-9]{64}$') {
+        if (-not $automationDatabase -or -not (Test-Path -LiteralPath $automationDatabase -PathType Leaf)) {
+            throw "The local automation scheduler database referenced by the sync receipt is missing: $automationDatabase"
+        }
+        $actualAutomationHash = (Get-FileHash -LiteralPath $automationDatabase -Algorithm SHA256).Hash
+        if ($actualAutomationHash -ne $expectedAutomationHash) {
+            throw "The local automation scheduler database changed after $ExpectedMode completed. Retry the managed launch."
+        }
+    } else {
+        throw "The desktop sync receipt has an invalid automation scheduler database hash."
     }
     Write-Host "Verified $ExpectedMode receipt from $($receipt.completed_at); sync script $($receipt.sync_script_sha256.Substring(0, 12))." -ForegroundColor Green
 }
