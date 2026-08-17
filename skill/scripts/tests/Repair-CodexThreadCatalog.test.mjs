@@ -26,6 +26,7 @@ for (const automationId of ["shared-monitor", "weekly-radar"]) {
 const ids = {
   existing: "019f0000-0000-7000-8000-000000000001",
   active: "019f0000-0000-7000-8000-000000000002",
+  post019: "01a00abf-04d9-7a22-8d81-e6dfdf12c2f7",
   archived: "019f0000-0000-7000-8000-000000000003",
   broken: "019f0000-0000-7000-8000-000000000004",
   alias: "019f0000-0000-7000-8000-000000000005",
@@ -199,6 +200,7 @@ try {
 
   writeRollout(active, ids.existing, "Existing title");
   writeRollout(active, ids.active, "Active first message");
+  writeRollout(active, ids.post019, "Post-019 first message");
   writeRollout(archived, ids.archived, "Archived first message");
   writeRollout(active, ids.alias, "Alias first message", { sessionId: ids.existing });
   const existingAutomationPath = writeRollout(active, ids.automationExisting, "Run from machine A", {
@@ -240,6 +242,7 @@ try {
   const baseIndexRows = [
     { id: ids.existing, thread_name: "Existing custom title", updated_at: "2026-07-21T00:00:00Z" },
     { id: ids.active, thread_name: "Active custom title", updated_at: "2026-07-21T00:00:00Z" },
+    { id: ids.post019, thread_name: "Post-019 custom title", updated_at: "2026-08-16T13:24:52Z" },
     { id: ids.archived, thread_name: "Archived custom title", updated_at: "2026-07-21T00:00:00Z" },
     { id: ids.alias, thread_name: "Alias custom title", updated_at: "2026-07-21T00:00:00Z" },
     { id: ids.automationExisting, thread_name: "Machine A run", updated_at: "2026-07-21T00:00:00Z" },
@@ -251,8 +254,9 @@ try {
 
   run();
   let check = new DatabaseSync(databasePath, { readOnly: true });
-  assert.equal(check.prepare("SELECT count(*) AS n FROM threads").get().n, 7);
+  assert.equal(check.prepare("SELECT count(*) AS n FROM threads").get().n, 8);
   assert.equal(check.prepare("SELECT title FROM threads WHERE id=?").get(ids.active).title, "Active custom title");
+  assert.equal(check.prepare("SELECT title FROM threads WHERE id=?").get(ids.post019).title, "Post-019 custom title");
   assert.equal(check.prepare("SELECT archived FROM threads WHERE id=?").get(ids.archived).archived, 1);
   assert.equal(check.prepare("SELECT title FROM threads WHERE id=?").get(ids.existing).title, "existing");
   assert.equal(
@@ -281,7 +285,7 @@ try {
   schedulerCheck.close();
 
   let result = JSON.parse(fs.readFileSync(report, "utf8"));
-  assert.equal(result.inserted_count, 5);
+  assert.equal(result.inserted_count, 6);
   assert.equal(result.ignored_alias_count, 1);
   assert.equal(result.rollout_duplicate_groups, 1);
   assert.equal(result.rollout_prefix_extensions, 1);

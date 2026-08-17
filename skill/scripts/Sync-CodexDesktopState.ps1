@@ -40,15 +40,31 @@ function Ensure-Dir($Path) {
     }
 }
 
+function Get-Sha256($Path) {
+    $stream = New-Object IO.FileStream(
+        $Path,
+        [IO.FileMode]::Open,
+        [IO.FileAccess]::Read,
+        ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete)
+    )
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '')
+    } finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function Get-ShortHash($Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return "missing" }
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.Substring(0, 12)
+    return (Get-Sha256 $Path).Substring(0, 12)
 }
 
 function Get-FullHashOrMissing($Path) {
     if ([string]::IsNullOrWhiteSpace([string]$Path)) { return "missing" }
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return "missing" }
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+    return Get-Sha256 $Path
 }
 
 function Assert-InputUnchanged($Path, [string]$ExpectedHash, [string]$Label) {
@@ -577,9 +593,9 @@ function Write-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$Mode, 
         device = [string]$env:COMPUTERNAME
         mode = $Mode
         completed_at = [DateTimeOffset]::UtcNow.ToString("o")
-        sync_script_sha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
-        merge_helper_sha256 = (Get-FileHash -LiteralPath $MergeHelper -Algorithm SHA256).Hash
-        thread_catalog_helper_sha256 = (Get-FileHash -LiteralPath $ThreadCatalogRepairHelper -Algorithm SHA256).Hash
+        sync_script_sha256 = Get-Sha256 $PSCommandPath
+        merge_helper_sha256 = Get-Sha256 $MergeHelper
+        thread_catalog_helper_sha256 = Get-Sha256 $ThreadCatalogRepairHelper
         thread_catalog_status = if ($ThreadCatalogReport) { [string]$ThreadCatalogReport.status } else { "not-requested" }
         thread_catalog_inserted_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.inserted_count } else { 0 }
         thread_catalog_unresolved_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.unresolved_count } else { 0 }
@@ -600,9 +616,9 @@ function Write-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$Mode, 
         automation_scheduler_database_sha256 = Get-FullHashOrMissing $automationDatabase
         thread_catalog_corrupt_rollout_copy_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.corrupt_rollout_copy_count } else { 0 }
         thread_catalog_database_sha256 = Get-FullHashOrMissing $ThreadCatalogDatabase
-        organization_sha256 = (Get-FileHash -LiteralPath $BaseState -Algorithm SHA256).Hash
-        local_state_sha256 = (Get-FileHash -LiteralPath $LocalState -Algorithm SHA256).Hash
-        shared_state_sha256 = (Get-FileHash -LiteralPath $SharedState -Algorithm SHA256).Hash
+        organization_sha256 = Get-Sha256 $BaseState
+        local_state_sha256 = Get-Sha256 $LocalState
+        shared_state_sha256 = Get-Sha256 $SharedState
     }
     $temporary = "$SyncReceipt.tmp.$PID"
     [IO.File]::WriteAllText($temporary, ($payload | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding($false)))

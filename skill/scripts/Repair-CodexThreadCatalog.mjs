@@ -97,7 +97,7 @@ function collectRolloutCandidates(root, archived, groups) {
         continue;
       }
       if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".jsonl")) continue;
-      const match = entry.name.match(/(019[a-f0-9]{5}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+      const match = entry.name.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
       if (!match) continue;
       const id = match[1].toLowerCase();
       const stat = fs.statSync(fullPath);

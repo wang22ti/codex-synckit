@@ -34,6 +34,22 @@ function Ensure-Directory([string]$Path) {
     }
 }
 
+function Get-Sha256([string]$Path) {
+    $stream = New-Object IO.FileStream(
+        $Path,
+        [IO.FileMode]::Open,
+        [IO.FileAccess]::Read,
+        ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete)
+    )
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '')
+    } finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function Assert-RealDirectory([string]$Path, [string]$Label) {
     $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
     if (-not $item -or -not $item.PSIsContainer) {
@@ -60,7 +76,7 @@ function Get-FileMap([string]$Root) {
         if (-not [string]::IsNullOrWhiteSpace([string]$file.LinkType)) { continue }
         $relative = Get-RelativePath -Root $Root -Path $file.FullName
         $map[$relative] = [ordered]@{
-            hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+            hash = Get-Sha256 -Path $file.FullName
             length = [long]$file.Length
         }
     }
@@ -116,7 +132,7 @@ function Copy-Verified([string]$Source, [string]$Destination, [string]$ExpectedH
     $temporary = "$Destination.codexkit-tmp-$PID"
     try {
         Copy-Item -LiteralPath $Source -Destination $temporary -Force
-        if ((Get-FileHash -LiteralPath $temporary -Algorithm SHA256).Hash -ne $ExpectedHash) {
+        if ((Get-Sha256 -Path $temporary) -ne $ExpectedHash) {
             throw "Copied file verification failed: $Source"
         }
         if (Test-Path -LiteralPath $Destination -PathType Leaf) {
