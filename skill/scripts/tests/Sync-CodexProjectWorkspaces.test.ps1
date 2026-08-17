@@ -14,6 +14,9 @@ $testRoot = Join-Path ([IO.Path]::GetTempPath()) ("codex-project-sync-" + [guid]
 $local = Join-Path $testRoot "local"
 $shared = Join-Path $testRoot "shared"
 $baseline = Join-Path $testRoot "state\baseline.json"
+$scriptText = Get-Content -LiteralPath $scriptPath -Raw -Encoding UTF8
+Assert-True ($scriptText -notmatch '(?m)\bGet-FileHash\b') "workspace sync must not depend on the optional Get-FileHash cmdlet"
+Assert-True ($scriptText -match 'function Get-Sha256') "workspace sync should provide its own SHA-256 implementation"
 
 try {
     New-Item -ItemType Directory -Force -Path $local, $shared | Out-Null

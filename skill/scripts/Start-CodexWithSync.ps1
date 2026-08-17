@@ -51,6 +51,22 @@ function Invoke-Step($Title, [scriptblock]$ScriptBlock) {
     & $ScriptBlock
 }
 
+function Get-Sha256($Path) {
+    $stream = New-Object IO.FileStream(
+        $Path,
+        [IO.FileMode]::Open,
+        [IO.FileAccess]::Read,
+        ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete)
+    )
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '')
+    } finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function Assert-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$ExpectedMode, [DateTimeOffset]$StartedAt) {
     if (-not (Test-Path -LiteralPath $SyncReceipt -PathType Leaf)) {
         throw "The desktop sync helper did not write a completion receipt. OneDrive may still have an older codexkit-sync skill version."
@@ -83,7 +99,7 @@ function Assert-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$Expec
         if (-not (Test-Path -LiteralPath $check.Path -PathType Leaf)) {
             throw "The $($check.Label) referenced by the sync receipt is missing: $($check.Path)"
         }
-        $actual = (Get-FileHash -LiteralPath $check.Path -Algorithm SHA256).Hash
+        $actual = Get-Sha256 $check.Path
         if ($actual -ne $check.Expected) {
             throw "The $($check.Label) changed after $ExpectedMode completed. Wait for OneDrive and retry the managed launch."
         }
@@ -126,7 +142,7 @@ function Assert-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$Expec
         if (-not (Test-Path -LiteralPath $ThreadCatalogDatabase -PathType Leaf)) {
             throw "The local thread catalog referenced by the sync receipt is missing: $ThreadCatalogDatabase"
         }
-        $actualCatalogHash = (Get-FileHash -LiteralPath $ThreadCatalogDatabase -Algorithm SHA256).Hash
+        $actualCatalogHash = Get-Sha256 $ThreadCatalogDatabase
         if ($actualCatalogHash -ne $expectedCatalogHash) {
             throw "The local thread catalog changed after $ExpectedMode completed. Retry the managed launch."
         }
@@ -147,7 +163,7 @@ function Assert-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$Expec
         if (-not $automationDatabase -or -not (Test-Path -LiteralPath $automationDatabase -PathType Leaf)) {
             throw "The local automation scheduler database referenced by the sync receipt is missing: $automationDatabase"
         }
-        $actualAutomationHash = (Get-FileHash -LiteralPath $automationDatabase -Algorithm SHA256).Hash
+        $actualAutomationHash = Get-Sha256 $automationDatabase
         if ($actualAutomationHash -ne $expectedAutomationHash) {
             throw "The local automation scheduler database changed after $ExpectedMode completed. Retry the managed launch."
         }

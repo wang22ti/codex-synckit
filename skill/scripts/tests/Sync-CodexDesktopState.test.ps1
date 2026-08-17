@@ -20,6 +20,12 @@ function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
 
+foreach ($runtimeName in @("Sync-CodexDesktopState.ps1", "Start-CodexWithSync.ps1", "Sync-CodexProjectWorkspaces.ps1")) {
+    $runtimeText = Get-Content -LiteralPath (Join-Path $sourceScripts $runtimeName) -Raw -Encoding UTF8
+    Assert-True ($runtimeText -notmatch '(?m)\bGet-FileHash\b') "$runtimeName must not depend on the optional Get-FileHash cmdlet"
+    Assert-True ($runtimeText -match 'function Get-Sha256') "$runtimeName must provide a self-contained SHA-256 helper"
+}
+
 function Normalize-Text([string]$Text) {
     return $Text.Replace("`r`n", "`n").TrimEnd()
 }
