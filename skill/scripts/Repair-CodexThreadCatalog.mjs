@@ -97,9 +97,12 @@ function collectRolloutCandidates(root, archived, groups) {
         continue;
       }
       if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".jsonl")) continue;
-      const match = entry.name.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
-      if (!match) continue;
-      const id = match[1].toLowerCase();
+      const matches = entry.name.match(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi);
+      if (!matches?.length) continue;
+      // Newer Codex builds can emit derived rollout names containing both the
+      // top-level thread ID and a derived ID. Group those by the final ID so
+      // they cannot be mistaken for divergent copies of the top-level task.
+      const id = matches[matches.length - 1].toLowerCase();
       const stat = fs.statSync(fullPath);
       const candidate = {
         path: path.resolve(fullPath),

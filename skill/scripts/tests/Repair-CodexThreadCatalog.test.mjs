@@ -35,6 +35,8 @@ const ids = {
   automationPrefix: "019f0000-0000-7000-8000-000000000008",
   divergent: "019f0000-0000-7000-8000-000000000009",
   automationRetired: "019f0000-0000-7000-8000-000000000010",
+  derivedOne: "019f0000-0000-7000-8000-000000000011",
+  derivedTwo: "019f0000-0000-7000-8000-000000000012",
 };
 
 function rolloutRows(id, title, options = {}) {
@@ -201,6 +203,8 @@ try {
   writeRollout(active, ids.existing, "Existing title");
   writeRollout(active, ids.active, "Active first message");
   writeRollout(active, ids.post019, "Post-019 first message");
+  writeRollout(active, ids.active, "Derived branch one", { suffix: `_${ids.derivedOne}` });
+  writeRollout(active, ids.active, "Derived branch two", { suffix: `_${ids.derivedTwo}` });
   writeRollout(archived, ids.archived, "Archived first message");
   writeRollout(active, ids.alias, "Alias first message", { sessionId: ids.existing });
   const existingAutomationPath = writeRollout(active, ids.automationExisting, "Run from machine A", {
@@ -257,6 +261,10 @@ try {
   assert.equal(check.prepare("SELECT count(*) AS n FROM threads").get().n, 8);
   assert.equal(check.prepare("SELECT title FROM threads WHERE id=?").get(ids.active).title, "Active custom title");
   assert.equal(check.prepare("SELECT title FROM threads WHERE id=?").get(ids.post019).title, "Post-019 custom title");
+  assert.equal(
+    check.prepare("SELECT count(*) AS n FROM threads WHERE id IN (?, ?)").get(ids.derivedOne, ids.derivedTwo).n,
+    0,
+  );
   assert.equal(check.prepare("SELECT archived FROM threads WHERE id=?").get(ids.archived).archived, 1);
   assert.equal(check.prepare("SELECT title FROM threads WHERE id=?").get(ids.existing).title, "existing");
   assert.equal(
