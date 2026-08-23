@@ -56,6 +56,16 @@ Codex/ChatGPT 桌面应用或 Codex CLI，以及用于桌面状态辅助工具�
 安装只需执行一次。以后从开始菜单点击托管的 `ChatGPT` 快捷方式即可一键启动，
 同步准备和关闭后的整理会自动完成。
 
+如果同步后的任务能够显示，但因为分页历史而无法打开，请先关闭 ChatGPT，再运行：
+
+```powershell
+& "$env:USERPROFILE\OneDrive\CodexKit\skills\codex-skills\codexkit-sync\scripts\Restore-CodexPaginatedThread.ps1" `
+  -ThreadId '<会话 ID>'
+```
+
+该命令会创建一个可重复执行且兼容旧格式的恢复副本，不修改原始 rollout 分页。
+等待 OneDrive 同步完成后，在目标电脑执行 Managed Pull。
+
 ## 工作原理
 
 ```mermaid

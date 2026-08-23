@@ -72,6 +72,18 @@ Setup is performed once. Afterward, click the managed `ChatGPT` Start-menu
 shortcut for one-click launch; synchronization preparation and shutdown cleanup
 run automatically.
 
+If a synchronized task is listed but cannot be opened because its history is
+paginated, close ChatGPT and run:
+
+```powershell
+& "$env:USERPROFILE\OneDrive\CodexKit\skills\codex-skills\codexkit-sync\scripts\Restore-CodexPaginatedThread.ps1" `
+  -ThreadId '<thread-id>'
+```
+
+This creates an idempotent legacy-compatible recovery copy without changing
+the original rollout pages. Wait for OneDrive, then use Managed Pull on the
+destination PC.
+
 ## How it works
 
 ```mermaid

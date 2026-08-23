@@ -274,6 +274,22 @@ The controlled sync also validates `session-data\session_index.jsonl`. When no o
 
 Task visibility also depends on the device-local `%USERPROFILE%\.codex\state_5.sqlite` `threads` catalog; linked rollout files and `session_index.jsonl` alone do not guarantee that another desktop app lists a task. Before a managed Pull launches ChatGPT, run `Repair-CodexThreadCatalog.mjs` while the app is closed. It transactionally registers only missing top-level tasks that have both a shared title-index row and a shared rollout file, preserves every existing database row, ignores legacy child-rollout aliases whose filename ID differs from the canonical `session_id`, runs SQLite integrity and post-insert checks, and checkpoints the WAL before the launch receipt is hashed. Never copy or live-link `state_5.sqlite` between machines.
 
+When a paginated task is visible but the desktop app cannot open it, keep the
+source rollout pages immutable and create one standalone legacy-compatible
+recovery copy with `scripts\Restore-CodexPaginatedThread.ps1 -ThreadId <id>`.
+The helper discovers every page for the canonical thread ID, validates and
+hashes the sources, rewrites only copied metadata to a fresh thread ID,
+synthesizes compatibility events from response items, appends one title-index
+row, and records a device-local manifest. Repeating the same recovery is
+idempotent. Close ChatGPT first, wait for OneDrive after recovery, and use
+Managed Pull on the destination PC; never concatenate divergent transcripts.
+
+Newer Codex builds may name a derived rollout with both its top-level thread
+ID and a derived UUID. Candidate discovery must group such a file by the final
+UUID in its filename so it cannot be mistaken for a divergent copy of the
+indexed top-level rollout. Preserve the derived file; if it is not independently
+indexed, it remains outside the top-level catalog union.
+
 Automation history uses the same shared rollout union rather than a shared
 SQLite database. Independent runs from different machines have different
 thread IDs and must all survive. When duplicate rollout files carry the same

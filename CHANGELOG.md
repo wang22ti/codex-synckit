@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added an idempotent recovery helper for paginated Codex tasks that preserves
+  source rollout pages, creates a legacy-compatible copy, and registers its
+  title for cross-device Managed Pull.
+- Prevented derived rollout filenames containing two UUIDs from being grouped
+  as divergent copies of the indexed top-level task.
+
 ## 0.2.0-alpha - 2026-08-01
 
 - Reconciled completed automation runs into each device-local scheduler during
