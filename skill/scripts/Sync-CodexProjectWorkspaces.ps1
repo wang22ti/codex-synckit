@@ -27,6 +27,30 @@ if ([string]::IsNullOrWhiteSpace($BaselinePath)) {
 $StateRoot = Split-Path -Parent $BaselinePath
 $ConflictRoot = Join-Path $StateRoot "project-workspace-conflicts"
 $QuarantineRoot = Join-Path $StateRoot "project-workspace-quarantine"
+$ExcludedFolders = @(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'OneDriveExcludedFolders.json') -Raw | ConvertFrom-Json | ForEach-Object { $_ })
+$IgnoredPathCache = @{}
+
+function Test-SyncPathExcluded([string]$Relative) {
+    $parts = $Relative -split '[\\/]'
+    # Apply names to directories only: a source file named .next is not a folder.
+    for ($i = 0; $i -lt $parts.Length - 1; $i++) {
+        if ($parts[$i] -in $ExcludedFolders) { return $true }
+    }
+    if ($IgnoredPathCache.ContainsKey($Relative)) { return $IgnoredPathCache[$Relative] }
+    $prefix = ''
+    foreach ($part in $parts) {
+        $prefix = if ($prefix) { Join-Path $prefix $part } else { $part }
+        foreach ($root in @($LocalRoot, $SharedRoot)) {
+            $item = Get-Item -LiteralPath (Join-Path $root $prefix) -Force -ErrorAction SilentlyContinue
+            if ($item -and -not [string]::IsNullOrWhiteSpace([string]$item.LinkType)) {
+                $IgnoredPathCache[$Relative] = $true
+                return $true
+            }
+        }
+    }
+    $IgnoredPathCache[$Relative] = $false
+    return $false
+}
 
 function Ensure-Directory([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
@@ -72,12 +96,19 @@ function Get-RelativePath([string]$Root, [string]$Path) {
 function Get-FileMap([string]$Root) {
     $map = @{}
     if (-not (Test-Path -LiteralPath $Root -PathType Container)) { return $map }
-    foreach ($file in @(Get-ChildItem -LiteralPath $Root -File -Recurse -Force -ErrorAction Stop | Sort-Object FullName)) {
-        if (-not [string]::IsNullOrWhiteSpace([string]$file.LinkType)) { continue }
-        $relative = Get-RelativePath -Root $Root -Path $file.FullName
-        $map[$relative] = [ordered]@{
-            hash = Get-Sha256 -Path $file.FullName
-            length = [long]$file.Length
+    $pending = New-Object 'System.Collections.Generic.Stack[string]'
+    $pending.Push($Root)
+    while ($pending.Count) {
+        foreach ($file in @(Get-ChildItem -LiteralPath $pending.Pop() -Force -ErrorAction Stop)) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$file.LinkType)) { continue }
+            if ($file.PSIsContainer -and $file.Name -in $ExcludedFolders) { continue }
+            $relative = Get-RelativePath -Root $Root -Path $file.FullName
+            if (Test-SyncPathExcluded $relative) { continue }
+            if ($file.PSIsContainer) { $pending.Push($file.FullName); continue }
+            $map[$relative] = [ordered]@{
+                hash = Get-Sha256 -Path $file.FullName
+                length = [long]$file.Length
+            }
         }
     }
     return $map
@@ -88,7 +119,7 @@ function Read-Baseline {
     if (-not (Test-Path -LiteralPath $BaselinePath -PathType Leaf)) { return $map }
     $document = Get-Content -LiteralPath $BaselinePath -Raw -Encoding UTF8 | ConvertFrom-Json
     foreach ($entry in @($document.files)) {
-        if ($entry.path -and $entry.sha256) {
+        if ($entry.path -and $entry.sha256 -and -not (Test-SyncPathExcluded ([string]$entry.path))) {
             $map[[string]$entry.path] = [string]$entry.sha256
         }
     }

@@ -1,4 +1,5 @@
 dist/
+/.learnings/
 *.zip
 *.sha256
 .DS_Store

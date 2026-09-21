@@ -35,8 +35,9 @@ const ids = {
   automationPrefix: "019f0000-0000-7000-8000-000000000008",
   divergent: "019f0000-0000-7000-8000-000000000009",
   automationRetired: "019f0000-0000-7000-8000-000000000010",
-  derivedOne: "019f0000-0000-7000-8000-000000000011",
-  derivedTwo: "019f0000-0000-7000-8000-000000000012",
+  automationToolOutput: "019f0000-0000-7000-8000-000000000013",
+  derivedOne: "01a02235-e87a-7ef3-9451-426ffdabb84d",
+  derivedTwo: "01a02236-375b-7212-89f6-11622d5ffe3c",
 };
 
 function rolloutRows(id, title, options = {}) {
@@ -50,6 +51,7 @@ function rolloutRows(id, title, options = {}) {
     thread_source: threadSource,
     model_provider: "openai",
     cli_version: "test",
+    ...(options.historyMode ? { history_mode: options.historyMode } : {}),
   };
   if (sessionId === id) sessionPayload.id = id;
   const rows = [
@@ -64,15 +66,35 @@ function rolloutRows(id, title, options = {}) {
       payload: { approval_policy: "on-request", sandbox_policy: { type: "read-only" }, model: "test-model" },
     },
   ];
+  if (options.untrustedAutomationId) {
+    rows.push({
+      timestamp: "2026-07-21T00:00:01.250Z",
+      type: "response_item",
+      payload: {
+        type: "function_call_output",
+        name: "exec_command",
+        namespace: "codex_app",
+        output: `Automation ID: ${options.untrustedAutomationId}`,
+      },
+    });
+  }
   if (options.automationId) {
+    const payload = options.automationIdSource === "tool-output"
+      ? {
+          type: "function_call_output",
+          name: "automation_update",
+          namespace: "codex_app",
+          output: `Automation: Test\nAutomation ID: ${options.automationId}\nAutomation memory: memory.md`,
+        }
+      : {
+          type: "message",
+          role: "developer",
+          content: [{ type: "input_text", text: `Automation ID: ${options.automationId}` }],
+        };
     rows.push({
       timestamp: "2026-07-21T00:00:01.500Z",
       type: "response_item",
-      payload: {
-        type: "message",
-        role: "developer",
-        content: [{ type: "input_text", text: `Automation ID: ${options.automationId}` }],
-      },
+      payload,
     });
   }
   rows.push({
@@ -133,6 +155,7 @@ try {
       model_provider TEXT NOT NULL,
       cwd TEXT NOT NULL,
       title TEXT NOT NULL,
+      name TEXT,
       sandbox_policy TEXT NOT NULL,
       approval_mode TEXT NOT NULL,
       tokens_used INTEGER NOT NULL DEFAULT 0,
@@ -200,8 +223,12 @@ try {
   automationDatabase.close();
   fs.writeFileSync(runStatusRepair, JSON.stringify({ thread_ids: [ids.automationExisting] }), "utf8");
 
-  writeRollout(active, ids.existing, "Existing title");
-  writeRollout(active, ids.active, "Active first message");
+  const existingPath = writeRollout(active, ids.existing, "Existing title", { historyMode: "paginated" });
+  const historySetup = new DatabaseSync(databasePath);
+  historySetup.prepare("UPDATE threads SET rollout_path=? WHERE id=?").run(existingPath, ids.existing);
+  const existingBefore = historySetup.prepare("SELECT * FROM threads WHERE id=?").get(ids.existing);
+  historySetup.close();
+  writeRollout(active, ids.active, "Active first message", { historyMode: "paginated" });
   writeRollout(active, ids.post019, "Post-019 first message");
   writeRollout(active, ids.active, "Derived branch one", { suffix: `_${ids.derivedOne}` });
   writeRollout(active, ids.active, "Derived branch two", { suffix: `_${ids.derivedTwo}` });
@@ -238,6 +265,12 @@ try {
     threadSource: "automation",
     automationId: "retired-monitor",
   });
+  writeRollout(active, ids.automationToolOutput, "Run using current automation metadata", {
+    threadSource: "automation",
+    automationId: "shared-monitor",
+    automationIdSource: "tool-output",
+    untrustedAutomationId: "spoofed-monitor",
+  });
   fs.writeFileSync(
     path.join(archived, `rollout-2026-07-21T00-00-00-${ids.automationPrefix}-corrupt.jsonl`),
     Buffer.alloc(20000),
@@ -253,12 +286,13 @@ try {
     { id: ids.automationOtherMachine, thread_name: "Machine B run", updated_at: "2026-07-21T00:00:00Z" },
     { id: ids.automationPrefix, thread_name: "Extended run", updated_at: "2026-07-21T00:00:00Z" },
     { id: ids.automationRetired, thread_name: "Retired run", updated_at: "2026-07-21T00:00:00Z" },
+    { id: ids.automationToolOutput, thread_name: "Tool-output run", updated_at: "2026-07-21T00:00:00Z" },
   ];
   writeIndex(baseIndexRows);
 
   run();
   let check = new DatabaseSync(databasePath, { readOnly: true });
-  assert.equal(check.prepare("SELECT count(*) AS n FROM threads").get().n, 8);
+  assert.equal(check.prepare("SELECT count(*) AS n FROM threads").get().n, 9);
   assert.equal(check.prepare("SELECT title FROM threads WHERE id=?").get(ids.active).title, "Active custom title");
   assert.equal(check.prepare("SELECT title FROM threads WHERE id=?").get(ids.post019).title, "Post-019 custom title");
   assert.equal(
@@ -267,6 +301,11 @@ try {
   );
   assert.equal(check.prepare("SELECT archived FROM threads WHERE id=?").get(ids.archived).archived, 1);
   assert.equal(check.prepare("SELECT title FROM threads WHERE id=?").get(ids.existing).title, "existing");
+  assert.deepEqual(check.prepare("SELECT * FROM threads WHERE id=?").get(ids.existing),
+    Object.assign(Object.create(null), existingBefore, { history_mode: "paginated", name: "Existing custom title" }));
+  assert.equal(check.prepare("SELECT name FROM threads WHERE id=?").get(ids.active).name, "Active custom title");
+  assert.equal(check.prepare("SELECT history_mode FROM threads WHERE id=?").get(ids.active).history_mode, "paginated");
+  assert.equal(check.prepare("SELECT history_mode FROM threads WHERE id=?").get(ids.post019).history_mode, "legacy");
   assert.equal(
     path.resolve(check.prepare("SELECT rollout_path FROM threads WHERE id=?").get(ids.automationExisting).rollout_path),
     path.resolve(existingAutomationPath),
@@ -277,10 +316,10 @@ try {
   );
   check.close();
   let schedulerCheck = new DatabaseSync(automationDatabasePath, { readOnly: true });
-  assert.equal(schedulerCheck.prepare("SELECT count(*) AS n FROM automation_runs").get().n, 4);
+  assert.equal(schedulerCheck.prepare("SELECT count(*) AS n FROM automation_runs").get().n, 5);
   assert.equal(
     schedulerCheck.prepare("SELECT count(*) AS n FROM automation_runs WHERE status='ARCHIVED'").get().n,
-    4,
+    5,
   );
   assert.equal(
     schedulerCheck.prepare("SELECT last_run_at FROM automations WHERE id='shared-monitor'").get().last_run_at,
@@ -293,35 +332,89 @@ try {
   schedulerCheck.close();
 
   let result = JSON.parse(fs.readFileSync(report, "utf8"));
-  assert.equal(result.inserted_count, 6);
+  assert.equal(result.inserted_count, 7);
+  assert.equal(result.history_mode_repaired_count, 1);
+  assert.equal(result.history_name_repaired_count, 1);
+  const backups = fs.readdirSync(path.join(work, "thread-history-mode-backups"));
+  assert.equal(backups.length, 1);
+  const backupCheck = new DatabaseSync(path.join(work, "thread-history-mode-backups", backups[0]), { readOnly: true });
+  assert.deepEqual(backupCheck.prepare("SELECT * FROM threads WHERE id=?").get(ids.existing), existingBefore);
+  backupCheck.close();
   assert.equal(result.ignored_alias_count, 1);
   assert.equal(result.rollout_duplicate_groups, 1);
   assert.equal(result.rollout_prefix_extensions, 1);
   assert.equal(result.corrupt_rollout_copy_count, 1);
   assert.equal(result.rollout_conflict_count, 0);
-  assert.equal(result.automation_history_rollouts, 4);
-  assert.equal(result.automation_history_cataloged, 4);
-  assert.equal(result.automation_history_inserted_count, 3);
+  assert.equal(result.automation_history_rollouts, 5);
+  assert.equal(result.automation_history_cataloged, 5);
+  assert.equal(result.automation_history_inserted_count, 4);
   assert.equal(result.automation_history_path_repaired_count, 1);
+  assert.equal(result.automation_history_unknown_id_count, 0);
   assert.equal(result.automation_history_unresolved_count, 0);
   assert.equal(result.automation_scheduler_status, "reconciled");
-  assert.equal(result.automation_scheduler_runs, 4);
-  assert.equal(result.automation_scheduler_runs_cataloged, 4);
-  assert.equal(result.automation_scheduler_runs_inserted_count, 3);
+  assert.equal(result.automation_scheduler_runs, 5);
+  assert.equal(result.automation_scheduler_runs_cataloged, 5);
+  assert.equal(result.automation_scheduler_runs_inserted_count, 4);
   assert.equal(result.automation_scheduler_pending_repaired_count, 1);
   assert.equal(result.automation_scheduler_watermarks_advanced_count, 2);
   assert.equal(result.automation_scheduler_unresolved_definition_count, 0);
   assert.deepEqual(
     result.automation_histories.map((entry) => [entry.automation_id, entry.rollout_count]),
-    [["retired-monitor", 1], ["shared-monitor", 2], ["weekly-radar", 1]],
+    [["retired-monitor", 1], ["shared-monitor", 3], ["weekly-radar", 1]],
   );
 
   run();
   result = JSON.parse(fs.readFileSync(report, "utf8"));
   assert.equal(result.inserted_count, 0);
+  assert.equal(result.history_mode_repaired_count, 0);
+  assert.equal(result.history_name_repaired_count, 0);
+  assert.equal(result.history_path_repaired_count, 0);
   assert.equal(result.automation_history_path_repaired_count, 0);
   assert.equal(result.automation_scheduler_runs_inserted_count, 0);
   assert.equal(result.automation_scheduler_watermarks_advanced_count, 0);
+
+  // Another device may already have applied the initial mode-only patch.
+  const nameOnlySetup = new DatabaseSync(databasePath);
+  nameOnlySetup.prepare("UPDATE threads SET name=NULL, title='<recommended_plugins> injected text' WHERE id=?").run(ids.existing);
+  nameOnlySetup.close();
+  run();
+  result = JSON.parse(fs.readFileSync(report, "utf8"));
+  assert.equal(result.history_mode_repaired_count, 0);
+  assert.equal(result.history_name_repaired_count, 1);
+  const nameOnlyCheck = new DatabaseSync(databasePath, { readOnly: true });
+  assert.equal(nameOnlyCheck.prepare("SELECT name FROM threads WHERE id=?").get(ids.existing).name, "Existing custom title");
+  nameOnlyCheck.close();
+
+  // A different Windows profile must resolve the shared file by exact ID.
+  const pathSetup = new DatabaseSync(databasePath);
+  pathSetup.prepare("UPDATE threads SET rollout_path='C:\\old-device\\missing.jsonl' WHERE id=?").run(ids.existing);
+  pathSetup.close();
+  run();
+  result = JSON.parse(fs.readFileSync(report, "utf8"));
+  assert.equal(result.history_path_repaired_count, 1);
+  const pathCheck = new DatabaseSync(databasePath, { readOnly: true });
+  assert.equal(pathCheck.prepare("SELECT rollout_path FROM threads WHERE id=?").get(ids.existing).rollout_path, path.resolve(existingPath));
+  pathCheck.close();
+
+  const customNameSetup = new DatabaseSync(databasePath);
+  customNameSetup.prepare("UPDATE threads SET history_mode='legacy', name='User chosen name' WHERE id=?").run(ids.existing);
+  customNameSetup.close();
+  run();
+  const customNameCheck = new DatabaseSync(databasePath, { readOnly: true });
+  assert.equal(customNameCheck.prepare("SELECT name FROM threads WHERE id=?").get(ids.existing).name, "User chosen name");
+  customNameCheck.close();
+
+  // A catalog pointing at another task must not borrow its name or format.
+  const mismatchSetup = new DatabaseSync(databasePath);
+  const wrongPath = path.join(active, `rollout-2026-07-21T00-00-00-${ids.active}.jsonl`);
+  mismatchSetup.prepare("UPDATE threads SET rollout_path=?, history_mode='legacy', name=NULL WHERE id=?").run(wrongPath, ids.existing);
+  mismatchSetup.close();
+  run();
+  const mismatchCheck = new DatabaseSync(databasePath);
+  assert.equal(mismatchCheck.prepare("SELECT history_mode FROM threads WHERE id=?").get(ids.existing).history_mode, "legacy");
+  assert.equal(mismatchCheck.prepare("SELECT name FROM threads WHERE id=?").get(ids.existing).name, null);
+  mismatchCheck.prepare("UPDATE threads SET rollout_path=?, history_mode='paginated', name='User chosen name' WHERE id=?").run(existingPath, ids.existing);
+  mismatchCheck.close();
 
   fs.writeFileSync(path.join(active, `rollout-${ids.broken}.jsonl`), "{}\n", "utf8");
   writeIndex(baseIndexRows.concat({ id: ids.broken, thread_name: "Broken" }));
@@ -350,7 +443,7 @@ try {
   assert.equal(check.prepare("SELECT count(*) AS n FROM threads WHERE id=?").get(ids.divergent).n, 0);
   check.close();
   schedulerCheck = new DatabaseSync(automationDatabasePath, { readOnly: true });
-  assert.equal(schedulerCheck.prepare("SELECT count(*) AS n FROM automation_runs").get().n, 4);
+  assert.equal(schedulerCheck.prepare("SELECT count(*) AS n FROM automation_runs").get().n, 5);
   schedulerCheck.close();
 
   console.log("Repair-CodexThreadCatalog tests passed");

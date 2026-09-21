@@ -58,6 +58,17 @@ Default projectless-workspace synchronization keeps
 `CodexKit\CodexProjects` as its OneDrive transport copy. The Managed launcher
 pulls workspaces before launch and pushes them after ChatGPT exits.
 
+Workspace hashing uses the script's own .NET SHA-256 implementation rather
+than relying on the optional `Get-FileHash` cmdlet. This keeps Managed Pull
+working on Windows PowerShell installations whose utility module cannot be
+resolved or auto-loaded.
+
+The complete Managed runtime chain—project workspace synchronization, desktop
+state synchronization, and launch-receipt verification—must use self-contained
+.NET hashing. Regression tests statically reject `Get-FileHash` in those
+runtime scripts and exercise Pull, catalog repair, receipt verification, and
+Push under Windows PowerShell 5.1.
+
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\OneDrive\CodexKit\Install-CodexKitForWindows.ps1" -Recommended
 ```
@@ -140,6 +151,19 @@ When global memory is linked, the installer disables maintenance Git commits so 
 Device-local memory state is deliberately not synchronized: maintenance logs, interval timestamps, hook reflect markers, removed-project archives, Task Scheduler instances, and Git metadata. Project `.learnings` outside OneDrive also remain local.
 
 The shared registry minimizes writes and can recover valid rows from OneDrive conflict-copy TSV files, but two machines should still avoid registering or unregistering projects at exactly the same time.
+
+## OneDrive Dependencies And Caches
+
+For small-file stalls or install/repair work, read
+[OneDrive small-file prevention](references/onedrive-small-files.md).
+`-Recommended` and `-Repair` add the shared dependency/cache exclusion list to
+the current machine's OneDrive policy (Windows UAC when entries are missing)
+and restart a running OneDrive in the normal user session after a change.
+`-Status` checks policy without mutation. Controlled workspace Pull/Push also
+prunes these folders and actual links before hashing, including old baseline
+entries, so ignored files are never treated as deletions. Existing cloud content
+is retained. Put new disposable work outside OneDrive; retain conversation data,
+source, and deliverables. Never globally exclude general `tmp` or `.git` trees.
 
 ## Verification
 
@@ -274,15 +298,10 @@ The controlled sync also validates `session-data\session_index.jsonl`. When no o
 
 Task visibility also depends on the device-local `%USERPROFILE%\.codex\state_5.sqlite` `threads` catalog; linked rollout files and `session_index.jsonl` alone do not guarantee that another desktop app lists a task. Before a managed Pull launches ChatGPT, run `Repair-CodexThreadCatalog.mjs` while the app is closed. It transactionally registers only missing top-level tasks that have both a shared title-index row and a shared rollout file, preserves every existing database row, ignores legacy child-rollout aliases whose filename ID differs from the canonical `session_id`, runs SQLite integrity and post-insert checks, and checkpoints the WAL before the launch receipt is hashed. Never copy or live-link `state_5.sqlite` between machines.
 
-When a paginated task is visible but the desktop app cannot open it, keep the
-source rollout pages immutable and create one standalone legacy-compatible
-recovery copy with `scripts\Restore-CodexPaginatedThread.ps1 -ThreadId <id>`.
-The helper discovers every page for the canonical thread ID, validates and
-hashes the sources, rewrites only copied metadata to a fresh thread ID,
-synthesizes compatibility events from response items, appends one title-index
-row, and records a device-local manifest. Repeating the same recovery is
-idempotent. Close ChatGPT first, wait for OneDrive after recovery, and use
-Managed Pull on the destination PC; never concatenate divergent transcripts.
+Thread IDs are UUID-shaped hexadecimal identifiers and must not be filtered by
+a historical timestamp prefix such as `019`. Newer valid IDs may begin with
+`01a` or later prefixes; catalog reconciliation and its regression tests must
+accept the full `8-4-4-4-12` identifier shape.
 
 Newer Codex builds may name a derived rollout with both its top-level thread
 ID and a derived UUID. Candidate discovery must group such a file by the final
@@ -316,6 +335,61 @@ The desktop launcher must discover packaged builds from their Appx manifest and 
 Treat the Windows Codex-to-ChatGPT change as an in-place application migration, not a coexistence scenario. Keep package lookup narrowly scoped to the explicit `OpenAI.Codex` and `OpenAI.ChatGPT` identities plus the `codex` protocol; do not add broad ChatGPT process or package discovery.
 
 ## Editing
+
+### Custom sidebar sections
+
+Desktop organization includes the account-partitioned persisted atom
+`sidebar-custom-sections-v3`: logical IDs, names, ordered project/task item keys,
+section order, collapsed sections, and task host hints. Push strips native
+`hostSectionIds`, migration-complete markers, and pending deletion bookkeeping
+from the shared representation. Pull preserves matching target-native bindings;
+an absent field from an older package does not erase existing sections, whereas
+an explicitly empty account section list does propagate deletion.
+
+After task catalog import and before Managed launch, the catalog helper backs up
+the local SQLite database when necessary, reconciles custom `thread_sections`
+and task membership/order, and writes verified native bindings into local JSON.
+Only previously mapped sections removed by Pull can be deleted; their tasks
+remain in the catalog. Unrelated native sections are preserved. Native service
+IDs and the full SQLite database never travel in OneDrive. Older schemas retain
+the app's legacy migration path. Missing task rows remain in the logical item
+list for later arrival, with `sidebar_section_missing_threads` in the receipt;
+do not claim those tasks have already been restored. The receipt also records
+`sidebar_sections_status` and `sidebar_sections_count`.
+
+Test `Merge-CodexSidebarState.test.mjs`, `SidebarSections.test.mjs`, the task
+catalog tests, and the desktop lifecycle tests when changing this behavior.
+Do not overwrite the live local desktop JSON/database while ChatGPT is running.
+A user-requested initial publish can copy only the current section field to the
+shared primary after checking the source field and destination hash again,
+keeping the existing single shared backup; normal later updates use Managed Push.
+
+### History format compatibility
+
+Catalog imports must preserve `session_meta.payload.history_mode` (`legacy` or
+`paginated`), defaulting to `legacy` only when the field is absent or unknown.
+Current desktop builds support paginated history. An imported catalog row
+incorrectly marked `legacy` can cause `list_turns is not supported yet` even
+when the original rollout is intact. Managed Pull now backs up the local
+catalog and corrects existing legacy-to-paginated mismatches only when the
+catalog row's own rollout header has the same thread ID. This is a narrow
+exception to preserving existing rows: `history_mode` changes and an empty
+`name` is populated from the latest shared title index (falling back to a
+non-injected existing `title`), because current paginated
+readers use `name` and otherwise display a prompt-derived preview. Existing
+nonempty names are preserved. New imports also set `name` from the title
+index. IDs, projects, archive state, and rollout contents remain intact. Missing,
+malformed, or mismatched source headers are not repaired by this rule.
+Name repair also handles already-paginated rows left by the first mode-only
+fix. When a catalog's rollout path is missing on another device, locate its
+shared rollout by exact ID and validate the header before repairing the path;
+an existing path pointing to a different ID must never be repurposed. Preserve
+existing nonempty native names, even when the shared indexed name differs.
+The receipt records `thread_catalog_history_mode_repaired_count`,
+`thread_catalog_history_name_repaired_count`, and
+`thread_catalog_history_path_repaired_count`; first-launch database-missing
+receipts contain all three fields with zero values. Perform
+this catalog maintenance only while the desktop app is closed.
 
 When changing behavior:
 

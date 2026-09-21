@@ -164,6 +164,27 @@ const arrayFields = [
   "pinned-thread-ids",
 ];
 const projectlessPathFields = [...mapFields, "electron-saved-workspace-roots"];
+const sectionsField = "sidebar-custom-sections-v3";
+
+// Logical sidebar organization travels; app-server bindings belong to a device.
+function portableSections(accounts) {
+  if (accounts === undefined) return undefined;
+  const result = {};
+  for (const [account, value] of Object.entries(accounts)) {
+    if (!Array.isArray(value.sections) || !Array.isArray(value.sectionOrder) ||
+        !Array.isArray(value.collapsedSectionIds)) throw new Error("Invalid custom sidebar sections");
+    result[account] = {
+      sections: value.sections.map(({ id, name, itemKeys, appearance }) => {
+        if (!id || !name || !Array.isArray(itemKeys)) throw new Error("Invalid custom section definition");
+        return { id, name, itemKeys: clone(itemKeys), ...(appearance === undefined ? {} : { appearance }) };
+      }),
+      collapsedSectionIds: clone(value.collapsedSectionIds),
+      sectionOrder: clone(value.sectionOrder),
+      threadHostIds: clone(value.threadHostIds ?? {}),
+    };
+  }
+  return result;
+}
 
 function organizationFrom(state = {}) {
   const persisted = state["electron-persisted-atom-state"] ?? {};
@@ -174,6 +195,7 @@ function organizationFrom(state = {}) {
   organization["projectless-thread-ids"] = clone(state["projectless-thread-ids"] ?? []);
   organization["thread-descriptions-v1"] = clone(persisted["thread-descriptions-v1"] ?? {});
   organization["flat-project-sidebar-preferences-v1"] = clone(persisted["flat-project-sidebar-preferences-v1"]);
+  organization[sectionsField] = portableSections(persisted[sectionsField]);
   return organization;
 }
 
@@ -229,11 +251,15 @@ function mergeOrganization(base = {}, local = {}, shared = {}) {
     conflicts,
     "flat-project-sidebar-preferences-v1",
   );
+  // Absence means an older client/exporter; an explicit empty account is a deletion.
+  result[sectionsField] = local[sectionsField] === undefined ? clone(shared[sectionsField]) :
+    shared[sectionsField] === undefined ? clone(local[sectionsField]) :
+    mergeMap(base[sectionsField], local[sectionsField], shared[sectionsField], conflicts, sectionsField);
 
   return { organization: result, conflicts };
 }
 
-function applyOrganization(state, organization) {
+function applyOrganization(state, organization, local = false) {
   const result = clone(state);
   for (const field of [...mapFields, ...arrayFields, "thread-project-assignments", "projectless-thread-ids"]) {
     result[field] = clone(organization[field]);
@@ -244,6 +270,32 @@ function applyOrganization(state, organization) {
     persisted["flat-project-sidebar-preferences-v1"] = clone(organization["flat-project-sidebar-preferences-v1"]);
   } else {
     delete persisted["flat-project-sidebar-preferences-v1"];
+  }
+  if (organization[sectionsField] !== undefined) {
+    const incoming = portableSections(organization[sectionsField]);
+    if (local) {
+      const previous = persisted[sectionsField] ?? {};
+      const retired = new Set(result["codexkit-sidebar-retired-local-sections"] ?? []);
+      for (const [account, value] of Object.entries(incoming)) {
+        const old = previous[account];
+        for (const section of old?.sections ?? []) {
+          const native = section.hostSectionIds?.local;
+          if (native && !value.sections.some(s => s.id === section.id)) retired.add(native);
+        }
+        value.sections = value.sections.map(section => {
+          const oldSection = old?.sections?.find(s => s.id === section.id);
+          return { ...section, ...(oldSection?.hostSectionIds ? { hostSectionIds: clone(oldSection.hostSectionIds) } : {}) };
+        });
+        value.appServerLegacySectionIds = value.sections.map(s => s.id);
+        value.appServerMigratedHostIds = [];
+      }
+      // Account partitions not present in a transport file belong to this device.
+      persisted[sectionsField] = { ...previous, ...incoming };
+      if (retired.size) result["codexkit-sidebar-retired-local-sections"] = [...retired];
+    } else {
+      persisted[sectionsField] = incoming;
+      delete result["codexkit-sidebar-retired-local-sections"];
+    }
   }
   result["electron-persisted-atom-state"] = persisted;
   return result;
@@ -274,13 +326,15 @@ let organization;
 let conflicts = [];
 if (mode === "pull") {
   organization = clone(sharedOrganization);
+  organization[sectionsField] ??= clone(localOrganizationValue[sectionsField]);
 } else if (mode === "push") {
   organization = clone(localOrganizationValue);
+  organization[sectionsField] ??= clone(sharedOrganization[sectionsField]);
 } else {
   ({ organization, conflicts } = mergeOrganization(baseOrganization, localOrganizationValue, sharedOrganization));
 }
 
-writeJson(args["local-output"], applyOrganization(localState, localOrganization(organization, projectlessRoot)));
+writeJson(args["local-output"], applyOrganization(localState, localOrganization(organization, projectlessRoot), true));
 writeJson(args["shared-output"], applyOrganization(sharedState, organization));
 writeJson(args["base-output"], organization);
 writeJson(args["report-output"], {

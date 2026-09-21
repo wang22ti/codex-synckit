@@ -1,6 +1,20 @@
 # Changelog
 
-## Unreleased
+## 0.3.0-alpha - 2026-09-21
+
+- Synchronize custom sidebar section names, ordering, collapsed state, and
+  project/task membership, with device-local native section reconciliation.
+- Repair paginated task history mode, missing display names, and stale rollout
+  paths in place, preserving original task IDs and existing nonempty names.
+- Add 15 conservative OneDrive dependency/cache folder exclusions with additive
+  registry updates, rollback backups, per-machine UAC, and a normal-user restart.
+- Apply the same exclusions to workspace Pull/Push and package export; skip
+  directory links and ignore old cache baselines without deleting their files.
+- Add regression coverage for native sections, old-client compatibility,
+  registry preservation/idempotency, and cache/link boundaries.
+- Allow an explicit desktop-state source during export.
+
+### Earlier unreleased changes
 
 - Added an idempotent recovery helper for paginated Codex tasks that preserves
   source rollout pages, creates a legacy-compatible copy, and registers its
