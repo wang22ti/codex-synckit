@@ -153,6 +153,7 @@ End If
     $pullReceipt = Get-Content -LiteralPath (Join-Path $pull.Profile ".local\state\codexkit\last-desktop-sync.json") -Raw | ConvertFrom-Json
     Assert-True ($pullReceipt.mode -eq "pull" -and ([string]$pullReceipt.organization_sha256).Length -eq 64) "Pull receipt is incomplete"
     Assert-True ($pullReceipt.thread_catalog_status -eq "database-missing") "Pull receipt did not record the thread catalog state"
+    Assert-True ($pullReceipt.thread_catalog_history_mode_repaired_count -eq 0 -and $pullReceipt.thread_catalog_history_name_repaired_count -eq 0 -and $pullReceipt.thread_catalog_history_path_repaired_count -eq 0) "First-launch receipt must contain zero repair counts"
 
     $catalog = New-Fixture "catalog"
     $catalogTask = "019f0000-0000-7000-8000-000000000099"
@@ -216,6 +217,24 @@ if(!run || run.automation_id!=='integration-monitor' || run.status!=='ARCHIVED' 
     [IO.File]::WriteAllText($readSchedulerDbScript, $readSchedulerDb, (New-Object Text.UTF8Encoding($false)))
     & $node --no-warnings $readSchedulerDbScript $catalogAutomationDb $catalogTask
     Assert-True ($LASTEXITCODE -eq 0) "Pull did not reconcile the remote run into the local scheduler database"
+    $sectionFixtureScript = Join-Path $catalog.Root 'section-fixture.cjs'
+    $sectionFixture = @'
+const fs=require('fs'),{DatabaseSync}=require('node:sqlite');
+const db=new DatabaseSync(process.argv[2]);
+const id='22222222-2222-4222-8222-222222222222';
+if(process.argv[5]==='verify'){
+  if(db.prepare('SELECT thread_section_id FROM threads WHERE id=?').get(process.argv[4]).thread_section_id!==id) throw Error('Native task section missing');
+} else {
+  db.exec('CREATE TABLE thread_sections(id TEXT PRIMARY KEY,name TEXT NOT NULL); ALTER TABLE threads ADD COLUMN thread_section_id TEXT; ALTER TABLE threads ADD COLUMN section_position INTEGER; ALTER TABLE threads ADD COLUMN section_entered_at_ms INTEGER; ALTER TABLE threads ADD COLUMN is_pinned INTEGER DEFAULT 0;');
+  const s=JSON.parse(fs.readFileSync(process.argv[3]));
+  s['electron-persisted-atom-state']['sidebar-custom-sections-v3']={account:{sections:[{id,name:'Integration section',itemKeys:['codex:thread:local:'+process.argv[4]]}],sectionOrder:['custom:'+id],collapsedSectionIds:[]}};
+  fs.writeFileSync(process.argv[3],JSON.stringify(s));
+}
+db.close();
+'@
+    [IO.File]::WriteAllText($sectionFixtureScript, $sectionFixture, (New-Object Text.UTF8Encoding($false)))
+    & $node --no-warnings $sectionFixtureScript $catalogDb (Join-Path $catalog.Kit 'desktop-state\.codex-global-state.json') $catalogTask
+    Assert-True ($LASTEXITCODE -eq 0) 'Could not create native sidebar fixture'
     $oldProfile = $env:USERPROFILE
     $oldNode = $env:CODEXKIT_NODE_EXE
     $oldDesktop = $env:CODEX_DESKTOP_EXE
@@ -232,6 +251,10 @@ if(!run || run.automation_id!=='integration-monitor' || run.status!=='ARCHIVED' 
     }
 
     $push = New-Fixture "push"
+    & $node --no-warnings $sectionFixtureScript $catalogDb (Join-Path $catalog.Kit 'desktop-state\.codex-global-state.json') $catalogTask verify
+    Assert-True ($LASTEXITCODE -eq 0) 'Managed Pull did not install native section membership'
+    $sectionReceipt = Get-Content -LiteralPath (Join-Path $catalog.Profile '.local\state\codexkit\last-desktop-sync.json') -Raw | ConvertFrom-Json
+    Assert-True ($sectionReceipt.sidebar_sections_status -eq 'reconciled' -and $sectionReceipt.sidebar_sections_count -eq 1 -and $sectionReceipt.sidebar_section_missing_threads -eq 0) 'Missing section receipt coverage'
     $pushLocal = Join-Path $push.Profile ".codex\.codex-global-state.json"
     $pushShared = Join-Path $push.Kit "desktop-state\.codex-global-state.json"
     Write-Json $pushLocal (New-State "local-device" "01900000-0000-0000-0000-000000000003" "local task")

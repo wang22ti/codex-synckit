@@ -15,6 +15,8 @@ $sourceAgents = Join-Path $testRoot "source\.agents"
 $sourceMemory = Join-Path $testRoot "source\global-memory"
 $defaultDestination = Join-Path $testRoot "default-kit"
 $optOutDestination = Join-Path $testRoot "opt-out-kit"
+$overrideDestination = Join-Path $testRoot "override-kit"
+$overrideDesktopState = Join-Path $testRoot "desktop-state.override.json"
 $exporter = Join-Path (Split-Path -Parent $PSScriptRoot) "Export-CodexKit.ps1"
 $syncSkillSource = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
@@ -34,9 +36,14 @@ try {
     Set-Content -LiteralPath (Join-Path $sourceCodex "sessions\2026\01\01\test.jsonl") -Value '{"type":"test"}' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $sourceCodex "session_index.jsonl") -Value '{"id":"test","title":"Test"}' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $sourceCodex ".codex-global-state.json") -Value '{"projects":{},"thread-projects":{}}' -Encoding UTF8
+    Set-Content -LiteralPath $overrideDesktopState -Value '{"projects":{"override":true},"thread-projects":{}}' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $sourceCodex "skills\memory-and-improvement\SKILL.md") -Value '# memory subsystem fixture' -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $sourceMemory "README.md") -Value '# private global memory fixture' -Encoding UTF8
     Copy-Item -LiteralPath $syncSkillSource -Destination (Join-Path $sourceCodex "skills\codexkit-sync") -Recurse
+    $fixtureCache = Join-Path $sourceCodex 'skills\sample\.next'
+    New-Item -ItemType Directory -Path $fixtureCache -Force | Out-Null
+    Set-Content (Join-Path $fixtureCache 'cache.dat') 'generated cache'
+    Set-Content (Join-Path (Split-Path -Parent $fixtureCache) 'SKILL.md') '# source preserved'
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $exporter `
         -SourceCodexHome $sourceCodex `
@@ -45,6 +52,8 @@ try {
         -DestinationRoot $defaultDestination `
         -Force
     if ($LASTEXITCODE -ne 0) { throw "Default export failed with exit code $LASTEXITCODE." }
+    Assert-True (-not (Test-Path (Join-Path $defaultDestination 'skills\codex-skills\sample\.next\cache.dat'))) 'shared cache rules must apply to package exports'
+    Assert-True (Test-Path (Join-Path $defaultDestination 'skills\codex-skills\sample\SKILL.md')) 'source skill must survive cache filtering'
 
     Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "session-data\sessions\2026\01\01\test.jsonl") -PathType Leaf) "default export should include conversations"
     Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "session-data\session_index.jsonl") -PathType Leaf) "default export should include the title index"
@@ -61,6 +70,19 @@ try {
     Assert-True ([bool]$defaultManifest.include_sessions) "manifest should record default session inclusion"
     Assert-True ([bool]$defaultManifest.include_desktop_state) "manifest should record default desktop-state inclusion"
     Assert-True ([bool]$defaultManifest.include_memory_subsystem) "manifest should record memory subsystem inclusion"
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $exporter `
+        -SourceCodexHome $sourceCodex `
+        -SourceDesktopState $overrideDesktopState `
+        -SourceAgentsRoot $sourceAgents `
+        -SourceGlobalMemory $sourceMemory `
+        -DestinationRoot $overrideDestination `
+        -ExcludeSessions `
+        -ExcludeMemorySubsystem `
+        -Force
+    if ($LASTEXITCODE -ne 0) { throw "Desktop-state override export failed with exit code $LASTEXITCODE." }
+    $overrideState = Get-Content -LiteralPath (Join-Path $overrideDestination "desktop-state\.codex-global-state.json") -Raw -Encoding UTF8
+    Assert-True ($overrideState -match '"override"\s*:\s*true') "explicit desktop-state source should be exported"
     $managedVbsPath = Join-Path $defaultDestination "Start-CodexManaged.vbs"
     $managedVbsBytes = [IO.File]::ReadAllBytes($managedVbsPath)
     Assert-True (-not (
@@ -134,6 +156,12 @@ try {
     $savedUserProfile = $env:USERPROFILE
     try {
         $env:USERPROFILE = Join-Path $testRoot "legacy-profile"
+        $beforeStatus = @(Get-ChildItem $defaultDestination -Recurse -File | ForEach-Object { "$($_.FullName)|$($_.Length)|$($_.LastWriteTimeUtc.Ticks)" }) -join "`n"
+        $statusOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $defaultDestination 'Install-CodexKitForWindows.ps1') -KitRoot $defaultDestination -Status -DisableMemorySubsystem | Out-String
+        Assert-True ($LASTEXITCODE -eq 0) 'generated installer status must succeed on fake profile'
+        Assert-True ($statusOutput -match 'OneDrive folder exclusions') 'generated installer must report folder exclusions'
+        $afterStatus = @(Get-ChildItem $defaultDestination -Recurse -File | ForEach-Object { "$($_.FullName)|$($_.Length)|$($_.LastWriteTimeUtc.Ticks)" }) -join "`n"
+        Assert-True ($beforeStatus -eq $afterStatus) 'status must not write package files'
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $defaultDestination "Install-CodexKitForWindows.ps1") `
             -KitRoot $defaultDestination `
             -DocumentsRoot $legacyDocuments `

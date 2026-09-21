@@ -38,8 +38,8 @@ The optional memory subsystem's Bash maintenance tools require Git for Windows
 or another compatible Bash runtime.
 
 1. Download and extract
-   [`codex-synckit-0.2.0-alpha.zip`](https://github.com/wang22ti/codex-synckit/releases/download/v0.2.0-alpha/codex-synckit-0.2.0-alpha.zip).
-   See the [release notes](https://github.com/wang22ti/codex-synckit/releases/tag/v0.2.0-alpha)
+   [`codex-synckit-0.3.0-alpha.zip`](https://github.com/wang22ti/codex-synckit/releases/download/v0.3.0-alpha/codex-synckit-0.3.0-alpha.zip).
+   See the [release notes](https://github.com/wang22ti/codex-synckit/releases/tag/v0.3.0-alpha)
    for Alpha limitations and verification details.
 2. Double-click `Install-CodexSyncKit.cmd` to start setup.
 

@@ -129,8 +129,8 @@ function inspectFirstJsonRow(filePath) {
     }
     const line = chunk.subarray(0, newline < 0 ? count : newline).toString("utf8").replace(/^\uFEFF/, "").trim();
     if (!line) return { valid: false, error: "empty first JSON row" };
-    JSON.parse(line);
-    return { valid: true, error: null };
+    const row = JSON.parse(line);
+    return { valid: true, error: null, row };
   } catch (error) {
     return { valid: false, error: error.message };
   } finally {
@@ -302,6 +302,13 @@ async function loadRolloutMetadata(filePath, indexedTitle) {
       if (row.type === "session_meta" && row.payload) meta = row.payload;
       if (row.type === "turn_context" && row.payload && !turnContext) turnContext = row.payload;
       const payload = row.type === "response_item" ? row.payload : null;
+      if (
+        payload?.type === "function_call_output" &&
+        payload.namespace === "codex_app" &&
+        payload.name === "automation_update"
+      ) {
+        automationId ??= findAutomationId(payload.output);
+      }
       if (payload?.type === "message") {
         const pieces = Array.isArray(payload.content)
           ? payload.content.map((part) => asText(part?.text, "")).filter(Boolean)
@@ -339,6 +346,7 @@ async function loadRolloutMetadata(filePath, indexedTitle) {
     model_provider: asText(meta.model_provider, "openai"),
     cwd: asText(meta.cwd, process.cwd()),
     title,
+    name: indexedTitle || null,
     sandbox_policy: asText(turnContext?.sandbox_policy, "{}"),
     approval_mode: asText(turnContext?.approval_policy, "on-request"),
     tokens_used: 0,
@@ -360,7 +368,7 @@ async function loadRolloutMetadata(filePath, indexedTitle) {
     preview: firstUserMessage || title,
     recency_at: Math.floor(updatedMs / 1000),
     recency_at_ms: Math.floor(updatedMs),
-    history_mode: "legacy",
+    history_mode: ["legacy", "paginated"].includes(meta.history_mode) ? meta.history_mode : "legacy",
     automation_id: automationId,
     automation_completed: terminal.completed,
     automation_completed_at_ms: terminal.completedAtMs,
@@ -599,6 +607,99 @@ function reconcileAutomationScheduler(
   }
 }
 
+function reconcileSidebarSections(database, databasePath, statePath) {
+  if (!statePath || !fs.existsSync(statePath)) return { sidebar_sections_status: "not-requested" };
+  const original = fs.readFileSync(statePath, "utf8");
+  const state = JSON.parse(original);
+  const accounts = state["electron-persisted-atom-state"]?.["sidebar-custom-sections-v3"];
+  if (!accounts) return { sidebar_sections_status: "not-requested" };
+  const columns = new Set(database.prepare("PRAGMA table_info(threads)").all().map(c => c.name));
+  if (!database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='thread_sections'").get() ||
+      !["thread_section_id", "section_position", "section_entered_at_ms", "is_pinned"].every(c => columns.has(c))) {
+    return { sidebar_sections_status: "native-migration-required" };
+  }
+  const native = new Map(database.prepare("SELECT id,name FROM thread_sections").all().map(s => [s.id, s]));
+  const desired = new Map(), bindings = new Map(), statements = [];
+  let missing = 0;
+  for (const account of Object.values(accounts)) {
+    for (const section of account.sections) {
+      if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(section.id) || typeof section.name !== "string" || !Array.isArray(section.itemKeys)) {
+        throw new Error("Invalid synchronized sidebar section");
+      }
+      const mapped = section.hostSectionIds?.local;
+      const id = mapped && native.has(mapped) ? mapped : section.id;
+      if (bindings.has(id)) throw new Error(`Duplicate native sidebar section binding: ${id}`);
+      bindings.set(id, section);
+      if (!native.has(id)) statements.push(["INSERT INTO thread_sections(id,name) VALUES (?,?)", id, section.name]);
+      else if (native.get(id).name !== section.name) statements.push(["UPDATE thread_sections SET name=? WHERE id=?", section.name, id]);
+      section.hostSectionIds = { ...section.hostSectionIds, local: id };
+      let position = 0;
+      for (const item of section.itemKeys) {
+        if (!item.startsWith("codex:thread:local:")) continue;
+        const thread = item.slice("codex:thread:local:".length);
+        if (account.threadHostIds?.[thread] && account.threadHostIds[thread] !== "local") continue;
+        if (desired.has(thread)) throw new Error(`Task occurs in multiple custom sections: ${thread}`);
+        desired.set(thread, { id, position: (++position) * 1000000 });
+      }
+    }
+    account.appServerLegacySectionIds = account.sections.map(s => s.id);
+    // Keep native migration available if a task has not arrived on this device.
+    account.appServerMigratedHostIds = (account.appServerMigratedHostIds ?? []).filter(h => h !== "local");
+  }
+  const retired = new Set(state["codexkit-sidebar-retired-local-sections"] ?? []);
+  for (const id of bindings.keys()) retired.delete(id);
+  for (const id of retired) {
+    if (native.get(id)?.name === "Pinned") throw new Error("Refusing to retire built-in pinned section");
+  }
+  const managed = new Set([...bindings.keys(), ...retired]);
+  for (const row of database.prepare("SELECT id,thread_section_id,section_position,is_pinned FROM threads WHERE thread_section_id IS NOT NULL").all()) {
+    if (managed.has(row.thread_section_id) && !desired.has(row.id)) {
+      statements.push(["UPDATE threads SET thread_section_id=NULL,section_position=NULL,section_entered_at_ms=NULL WHERE id=?", row.id]);
+    }
+  }
+  for (const [thread, target] of desired) {
+    const row = database.prepare("SELECT thread_section_id,section_position,is_pinned FROM threads WHERE id=?").get(thread);
+    if (!row) { missing++; continue; }
+    if (row.thread_section_id !== target.id || row.section_position !== target.position || row.is_pinned !== 0) {
+      statements.push(["UPDATE threads SET thread_section_id=?,section_position=?,is_pinned=0,section_entered_at_ms=COALESCE(section_entered_at_ms,?) WHERE id=?", target.id, target.position, Date.now(), thread]);
+    }
+  }
+  for (const id of retired) if (native.has(id)) statements.push(["DELETE FROM thread_sections WHERE id=?", id]);
+  if (!missing) for (const account of Object.values(accounts)) account.appServerMigratedHostIds.push("local");
+  delete state["codexkit-sidebar-retired-local-sections"];
+  if (fs.readFileSync(statePath, "utf8") !== original) throw new Error("Desktop state changed during sidebar reconciliation");
+  if (statements.length) {
+    const backupRoot = path.join(path.dirname(databasePath), "sidebar-section-backups");
+    fs.mkdirSync(backupRoot, { recursive: true });
+    database.exec(`VACUUM INTO '${path.join(backupRoot, `state-${Date.now()}.sqlite`).replaceAll("'", "''")}'`);
+  }
+  const temporary = `${statePath}.sidebar-${process.pid}.tmp`;
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    for (const [sql, ...values] of statements) database.prepare(sql).run(...values);
+    fs.writeFileSync(temporary, `${JSON.stringify(state)}\n`, "utf8");
+    if (fs.readFileSync(statePath, "utf8") !== original) throw new Error("Desktop state changed before sidebar commit");
+    fs.renameSync(temporary, statePath);
+    database.exec("COMMIT");
+  } catch (error) {
+    database.exec("ROLLBACK");
+    if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+    // Restore only our own replacement; never overwrite a concurrent app write.
+    if (fs.readFileSync(statePath, "utf8") === `${JSON.stringify(state)}\n`) fs.writeFileSync(statePath, original, "utf8");
+    throw error;
+  }
+  if (statements.length) {
+    const directory = path.join(path.dirname(databasePath), "sidebar-section-backups");
+    const backups = fs.readdirSync(directory).filter(name => /^state-\d+\.sqlite$/.test(name)).sort().reverse();
+    for (const name of backups.slice(2)) {
+      try { fs.unlinkSync(path.join(directory, name)); }
+      catch (error) { console.warn(`Could not prune old sidebar backup ${name}: ${error.message}`); }
+    }
+  }
+  return { sidebar_sections_status: "reconciled", sidebar_sections_count: bindings.size,
+    sidebar_section_statements: statements.length, sidebar_section_missing_threads: missing };
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   const sharedAutomationDefinitionIds = loadAutomationDefinitionIds(args["automation-root"]);
@@ -650,6 +751,8 @@ async function main() {
     }));
     const columnNames = new Set(columns.map((column) => column.name));
     const selectedColumns = ["id", "rollout_path"];
+    if (columnNames.has("name")) selectedColumns.push("name", "title");
+    if (columnNames.has("history_mode")) selectedColumns.push("history_mode");
     if (columnNames.has("thread_source")) selectedColumns.push("thread_source");
     const existingRows = new Map(
       database
@@ -659,6 +762,35 @@ async function main() {
     );
 
     const metadata = new Map();
+    // Existing imported rows may have been incorrectly registered as legacy.
+    // Validate their own rollout, not a same-title or derived rollout candidate.
+    const historyModeRepairs = [];
+    if (columnNames.has("history_mode")) {
+      for (const existing of existingRows.values()) {
+        if (!["legacy", "paginated"].includes(existing.history_mode)) continue;
+        const missingName = columnNames.has("name") && !existing.name;
+        const missingPath = !existing.rollout_path || !fs.existsSync(existing.rollout_path);
+        if (existing.history_mode === "paginated" && !missingName && !missingPath) continue;
+        const rolloutPath = missingPath ? union.rollouts.get(existing.id.toLowerCase())?.path : existing.rollout_path;
+        if (!rolloutPath || !fs.existsSync(rolloutPath)) continue;
+        const stat = fs.statSync(rolloutPath);
+        const first = inspectFirstJsonRow(rolloutPath);
+        const meta = first.row?.type === "session_meta" ? first.row.payload : null;
+        if (asText(meta?.id || meta?.session_id).toLowerCase() === existing.id.toLowerCase() && meta?.history_mode === "paginated") {
+          const displayName = [titles.get(existing.id.toLowerCase())?.title, existing.title].find(
+            (value) => typeof value === "string" && value.trim() &&
+              !/^\s*<(recommended_plugins|environment_context)>/.test(value),
+          );
+          const nameRepair = missingName && Boolean(displayName);
+          if (existing.history_mode === "paginated" && !nameRepair && !missingPath) continue;
+          const row = { id: existing.id.toLowerCase(), history_mode: "paginated", rollout_path: rolloutPath,
+            input_size: stat.size, input_mtime_ms: stat.mtimeMs };
+          historyModeRepairs.push({ row, previous_mode: existing.history_mode,
+            name_repaired: nameRepair, name: nameRepair ? displayName : existing.name,
+            path_repaired: missingPath });
+        }
+      }
+    }
     for (const [id, title] of titles) {
       const rollout = union.rollouts.get(id);
       if (!rollout) continue;
@@ -688,10 +820,31 @@ async function main() {
         pathRepairRows.push({ row, rollout: union.rollouts.get(id), oldPath: existing.rollout_path });
       }
     }
-    for (const entry of [...insertRows, ...pathRepairRows]) assertMetadataInputUnchanged(entry.row);
+    for (const entry of [...insertRows, ...pathRepairRows, ...historyModeRepairs]) assertMetadataInputUnchanged(entry.row);
+
+    if (historyModeRepairs.length) {
+      const backupRoot = path.join(path.dirname(args.database), "thread-history-mode-backups");
+      fs.mkdirSync(backupRoot, { recursive: true });
+      const backup = path.join(backupRoot, `state-${Date.now()}.sqlite`);
+      database.exec(`VACUUM INTO '${backup.replaceAll("'", "''")}'`);
+    }
 
     database.exec("BEGIN IMMEDIATE");
     try {
+      for (const repair of historyModeRepairs) {
+        const { row, previous_mode } = repair;
+        assertMetadataInputUnchanged(row);
+        // Paginated readers use name, not the legacy title display fallback.
+        // Preserve a real existing name, otherwise retain the imported title.
+        const nameAssignment = columnNames.has("name") ? ", name=?" : "";
+        const values = [row.history_mode, row.rollout_path];
+        if (columnNames.has("name")) values.push(repair.name ?? null);
+        values.push(row.id, previous_mode, existingRows.get(row.id).rollout_path);
+        const result = database.prepare(
+          `UPDATE threads SET history_mode=?, rollout_path=?${nameAssignment} WHERE lower(id)=? AND history_mode=? AND rollout_path=?`,
+        ).run(...values);
+        if (result.changes !== 1) throw new Error(`Thread changed during history-mode repair: ${row.id}`);
+      }
       for (const { row, rollout } of insertRows) {
         row.archived = rollout.archived ? 1 : 0;
         row.archived_at = rollout.archived ? row.updated_at : null;
@@ -740,8 +893,11 @@ async function main() {
       sharedAutomationDefinitionIds,
       runStatusRepairIds,
     );
+    const sidebar = reconcileSidebarSections(database, args.database, args["desktop-state"]);
+    database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
     const report = {
       schema_version: 2,
+      ...sidebar,
       status: "reconciled",
       indexed_titles: titles.size,
       rollout_files: [...rolloutGroups.values()].reduce((sum, entries) => sum + entries.length, 0),
@@ -755,6 +911,12 @@ async function main() {
       rollout_conflicts: [],
       inserted_count: inserted.length,
       inserted_ids: inserted,
+      history_mode_repaired_count: historyModeRepairs.filter((entry) => entry.previous_mode !== entry.row.history_mode).length,
+      history_name_repaired_count: historyModeRepairs.filter((entry) => entry.name_repaired).length,
+      history_path_repaired_count: historyModeRepairs.filter((entry) => entry.path_repaired).length,
+      history_mode_repairs: historyModeRepairs.map(({ row, previous_mode, name_repaired, path_repaired }) => ({
+        thread_id: row.id, previous_mode, history_mode: row.history_mode, name_repaired, path_repaired,
+      })),
       ignored_alias_count: ignoredAliases.length,
       ignored_aliases: ignoredAliases,
       unresolved_count: unresolved.length,

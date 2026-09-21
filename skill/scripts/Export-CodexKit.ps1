@@ -36,6 +36,7 @@
 param(
     [string]$DestinationRoot,
     [string]$SourceCodexHome = $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE ".codex" }),
+    [string]$SourceDesktopState,
     [string]$SourceAgentsRoot = $(Join-Path $env:USERPROFILE ".agents"),
     [string]$SourceGlobalMemory = $(Join-Path $env:USERPROFILE "global-memory"),
     [string]$MemoryTaskName = "Codex Memory Maintenance",
@@ -85,6 +86,7 @@ $script:ManifestFiles = New-Object System.Collections.Generic.List[object]
 $script:Warnings = New-Object System.Collections.Generic.List[string]
 $script:PreviousManagedPaths = @()
 $script:ProtectedManagedPaths = @{}
+$script:CacheFolderExclusions = @(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'OneDriveExcludedFolders.json') -Raw | ConvertFrom-Json | ForEach-Object { $_ })
 
 function Write-Info {
     param([string]$Message)
@@ -438,6 +440,7 @@ function Test-ExcludedPath {
         "cache", "logs", "log", "sessions", "session", "tmp", "temp", ".sandbox"
     )
 
+    $excludedDirs += $script:CacheFolderExclusions
     foreach ($part in $parts) {
         if ($excludedDirs -contains $part) { return $true }
     }
@@ -890,7 +893,7 @@ function Export-DesktopState {
     Write-Info "Extracting Codex desktop state (sidebar/project UI state)"
     $desktopState = Join-Path $script:DestinationRoot "desktop-state"
     Ensure-Directory $desktopState
-    Copy-FileSafe -Source (Join-Path $script:SourceCodexHome ".codex-global-state.json") -Destination (Join-Path $desktopState ".codex-global-state.json") -Category "desktop-state"
+    Copy-FileSafe -Source $script:SourceDesktopState -Destination (Join-Path $desktopState ".codex-global-state.json") -Category "desktop-state"
 }
 
 function Export-PluginInventory {
@@ -1214,6 +1217,7 @@ param(
     [switch]$DisableMemorySubsystem,
     [switch]$OpenHooksTrust,
     [switch]$Recommended,
+    [switch]$SkipOneDriveExclusions,
     [switch]$Status,
     [switch]$Repair,
     [string]$DocumentsRoot,
@@ -2093,6 +2097,7 @@ if ($MigrateExistingAutomations) {
 }
 
 if ($Status) {
+    & (Join-Path $KitRoot 'skills\codex-skills\codexkit-sync\scripts\Set-OneDriveFolderExclusions.ps1')
     Write-Host "CodexKit status for $env:COMPUTERNAME" -ForegroundColor Cyan
     Write-Host "Kit root: $KitRoot"
     if ($PreviousInstallState) {
@@ -2578,6 +2583,14 @@ function Install-AutomationsLink {
     }
 }
 
+if (($Recommended -or $Repair) -and -not $Status -and -not $SkipOneDriveExclusions) {
+    try {
+        & (Join-Path $KitRoot 'skills\codex-skills\codexkit-sync\scripts\Set-OneDriveFolderExclusions.ps1') -Apply -Elevate -RestartOneDrive
+    } catch {
+        Write-Warning "OneDrive folder policy is not configured: $($_.Exception.Message) Workspace cache filtering remains active; retry -Repair after resolving this warning."
+    }
+}
+
 if ($Repair) {
     Write-Host "Repairing only missing or incorrect CodexKit components..." -ForegroundColor Cyan
     $InstallSkillsLink = -not (Test-PathTargetsSource -Target (Join-Path $AgentsRoot "skills") -Source (Join-Path $KitRoot "skills\agents-skills"))
@@ -3012,6 +3025,13 @@ It is intended to live in OneDrive, while machine-local Codex state remains in `
 
 ## Recommended setup on another Windows machine
 
+Recommended setup and repair also install OneDrive folder exclusions for
+rebuildable dependencies and caches. Windows UAC is requested only for missing
+machine-policy entries; a running OneDrive restarts normally after changes.
+The same list filters controlled project workspace synchronization. Existing
+cloud files are retained. See the sync skill's `references/onedrive-small-files.md`.
+Use `-SkipOneDriveExclusions` only for deliberate opt-out or isolated tests.
+
 ```powershell
 cd "__DESTINATION_ROOT__"
 powershell -ExecutionPolicy Bypass -File .\Install-CodexKitForWindows.ps1 -Recommended
@@ -3084,6 +3104,8 @@ choice, and every replaced version is retained in the device-local quarantine.
 `-InstallSessionLinks` links `.codex\sessions`, `.codex\archived_sessions`, and `.codex\session_index.jsonl`. The title index controls recent thread names. Desktop sidebar project order, pinned state, task-to-project assignments, and workspace hints live in `.codex\.codex-global-state.json`; reconcile that organization with the controlled commands below.
 
 `Pull` installs the shared primary organization locally; `Push` publishes this machine's organization to the shared primary. Both preserve device-only window, permission, browser-tab, and active-workspace state. Use `Sync` only for an intentional three-way merge; same-field conflicts then keep the currently synchronizing machine's value with device-local diagnostics.
+
+Custom sidebar sections synchronize names, order, collapsed state, and project/task membership. Managed Pull also reconciles task membership with the target machine's native section tables before launch, with local backups. Native service IDs and SQLite databases remain device-local. On another machine, wait for OneDrive, fully close ChatGPT, then start `Start-CodexManaged.vbs`.
 
 When no other device has a fresh running heartbeat, controlled synchronization also removes duplicate `session_index.jsonl` rows by task ID and retains the newest title record. Malformed JSON blocks repair, and one rollback copy is retained device-locally.
 
@@ -3306,6 +3328,11 @@ function Create-ZipArchive {
 # Main
 try {
     $script:SourceCodexHome = Resolve-PathLoose $SourceCodexHome
+    $script:SourceDesktopState = if ([string]::IsNullOrWhiteSpace($SourceDesktopState)) {
+        Join-Path $script:SourceCodexHome ".codex-global-state.json"
+    } else {
+        Resolve-PathLoose $SourceDesktopState
+    }
     $script:SourceAgentsRoot = Resolve-PathLoose $SourceAgentsRoot
     $script:SourceGlobalMemory = Resolve-PathLoose $SourceGlobalMemory
 
@@ -3316,6 +3343,7 @@ try {
     $script:PreviousManagedPaths = @(Get-PreviousManagedPaths)
 
     Write-Info "Source Codex home: $script:SourceCodexHome"
+    Write-Info "Source desktop state: $script:SourceDesktopState"
     Write-Info "Source agents root: $script:SourceAgentsRoot"
     Write-Info "Source global memory: $script:SourceGlobalMemory"
     Write-Info "Long-term memory subsystem: $(if ($IncludeMemorySubsystem) { 'included' } else { 'excluded' })"

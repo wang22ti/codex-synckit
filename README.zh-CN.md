@@ -31,8 +31,8 @@ Codex/ChatGPT 桌面应用或 Codex CLI，以及用于桌面状态辅助工具�
 运行环境。
 
 1. 下载并解压
-   [`codex-synckit-0.2.0-alpha.zip`](https://github.com/wang22ti/codex-synckit/releases/download/v0.2.0-alpha/codex-synckit-0.2.0-alpha.zip)。
-   Alpha 限制和校验信息见[发布说明](https://github.com/wang22ti/codex-synckit/releases/tag/v0.2.0-alpha)。
+   [`codex-synckit-0.3.0-alpha.zip`](https://github.com/wang22ti/codex-synckit/releases/download/v0.3.0-alpha/codex-synckit-0.3.0-alpha.zip)。
+   Alpha 限制和校验信息见[发布说明](https://github.com/wang22ti/codex-synckit/releases/tag/v0.3.0-alpha)。
 2. 双击 `Install-CodexSyncKit.cmd` 启动安装。
 
 默认安装包含完整会话和侧栏组织，因此生成的 OneDrive `CodexKit` 目录应保持私有；

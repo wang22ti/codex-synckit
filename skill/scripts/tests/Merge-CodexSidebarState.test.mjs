@@ -150,6 +150,29 @@ try {
     "C:\\Users\\local\\Documents\\Codex\\2026-07-26\\task\\outputs",
   );
 
+  const sectionField = "sidebar-custom-sections-v3";
+  const account = { sections: [{ id: "section-a", name: "Materials", itemKeys: ["codex:project:p1", "codex:thread:local:t1"], hostSectionIds: { local: "source-native" }, pendingDeletionHostIdsByItemKey: { stale: ["local"] } }],
+    sectionOrder: ["pinned", "custom:section-a", "chats"], collapsedSectionIds: ["section-a"], threadHostIds: { t1: "local" }, appServerMigratedHostIds: ["local"] };
+  const sourceSections = state(1, {});
+  sourceSections["electron-persisted-atom-state"][sectionField] = { account };
+  const published = run({}, sourceSections, state(2, {}), "sections-push", "push");
+  const exported = published.sharedOutput["electron-persisted-atom-state"][sectionField].account;
+  assert.deepEqual(exported.sections[0].itemKeys, account.sections[0].itemKeys);
+  assert.equal(exported.sections[0].hostSectionIds, undefined);
+  assert.equal(exported.sections[0].pendingDeletionHostIdsByItemKey, undefined);
+  assert.equal(exported.appServerMigratedHostIds, undefined);
+  const targetSections = state(2, {});
+  targetSections["electron-persisted-atom-state"][sectionField] = { account: { ...account, sections: [{ ...account.sections[0], hostSectionIds: { local: "target-native" } }] } };
+  const imported = run({}, targetSections, published.sharedOutput, "sections-pull", "pull").localOutput;
+  assert.equal(imported["electron-persisted-atom-state"][sectionField].account.sections[0].hostSectionIds.local, "target-native");
+  assert.deepEqual(imported["electron-persisted-atom-state"][sectionField].account.sectionOrder, account.sectionOrder);
+  const oldClient = run({}, state(1, {}), published.sharedOutput, "old-client-push", "push");
+  assert.deepEqual(oldClient.sharedOutput["electron-persisted-atom-state"][sectionField].account, exported);
+  const deleted = state(1, {});
+  deleted["electron-persisted-atom-state"][sectionField] = { account: { sections: [], sectionOrder: [], collapsedSectionIds: [] } };
+  const deletion = run({}, targetSections, deleted, "sections-delete", "pull").localOutput;
+  assert.deepEqual(deletion["codexkit-sidebar-retired-local-sections"], ["target-native"]);
+  assert.deepEqual(deletion["electron-persisted-atom-state"][sectionField].account.sections, []);
   console.log("Merge-CodexSidebarState tests passed");
 } finally {
   fs.rmSync(work, { recursive: true, force: true });

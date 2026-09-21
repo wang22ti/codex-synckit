@@ -465,6 +465,9 @@ function Repair-ThreadCatalog {
         return [pscustomobject]@{
             status = "database-missing"
             inserted_count = 0
+            history_mode_repaired_count = 0
+            history_name_repaired_count = 0
+            history_path_repaired_count = 0
             unresolved_count = 0
             rollout_conflict_count = 0
             automation_history_rollouts = 0
@@ -506,6 +509,7 @@ function Repair-ThreadCatalog {
             "--sessions-root", $SessionsRoot,
             "--archived-root", $ArchivedSessionsRoot,
             "--session-index", $SessionIndex,
+            "--desktop-state", $LocalState,
             "--report-output", $reportPath
         )
         if ($automationDatabase) {
@@ -598,7 +602,13 @@ function Write-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$Mode, 
         thread_catalog_helper_sha256 = Get-Sha256 $ThreadCatalogRepairHelper
         thread_catalog_status = if ($ThreadCatalogReport) { [string]$ThreadCatalogReport.status } else { "not-requested" }
         thread_catalog_inserted_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.inserted_count } else { 0 }
+        thread_catalog_history_mode_repaired_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.history_mode_repaired_count } else { 0 }
+        thread_catalog_history_name_repaired_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.history_name_repaired_count } else { 0 }
+        thread_catalog_history_path_repaired_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.history_path_repaired_count } else { 0 }
         thread_catalog_unresolved_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.unresolved_count } else { 0 }
+        sidebar_sections_status = if ($ThreadCatalogReport -and $ThreadCatalogReport.PSObject.Properties.Name -contains 'sidebar_sections_status') { [string]$ThreadCatalogReport.sidebar_sections_status } else { 'not-requested' }
+        sidebar_sections_count = if ($ThreadCatalogReport -and $ThreadCatalogReport.PSObject.Properties.Name -contains 'sidebar_sections_count') { [int]$ThreadCatalogReport.sidebar_sections_count } else { 0 }
+        sidebar_section_missing_threads = if ($ThreadCatalogReport -and $ThreadCatalogReport.PSObject.Properties.Name -contains 'sidebar_section_missing_threads') { [int]$ThreadCatalogReport.sidebar_section_missing_threads } else { 0 }
         automation_history_rollouts = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_history_rollouts } else { 0 }
         automation_history_cataloged = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_history_cataloged } else { 0 }
         automation_history_inserted_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_history_inserted_count } else { 0 }
