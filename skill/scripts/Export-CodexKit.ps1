@@ -1479,9 +1479,9 @@ function Get-MemoryTaskState {
     } catch {
         $message = $_.Exception.Message
         return [pscustomobject]@{
-            Available = -not ($message -match 'Access is denied|鎷掔粷璁块棶')
+            Available = -not ($message -match 'Access is denied|\u62d2\u7edd\u8bbf\u95ee')
             Exists = $false
-            State = if ($message -match 'Access is denied|鎷掔粷璁块棶') { "unavailable" } else { "missing" }
+            State = if ($message -match 'Access is denied|\u62d2\u7edd\u8bbf\u95ee') { "unavailable" } else { "missing" }
             Arguments = ""
         }
     }
