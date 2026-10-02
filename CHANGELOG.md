@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Retain the newest five completed automation results per definition, including
+  accepted results, and archive older results during Managed Pull. Preserve
+  running/failed states, back up the scheduler locally, and report retention counts.
+- Give the synchronized Windows entry its own `ChatGPT - CodexKit` shortcut
+  name so it cannot be confused with the official direct entry.
+
 ## 0.3.0-alpha - 2026-09-21
 
 - Synchronize custom sidebar section names, ordering, collapsed state, and

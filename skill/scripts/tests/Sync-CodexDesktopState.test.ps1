@@ -211,7 +211,7 @@ const db=new DatabaseSync(process.argv[2],{readOnly:true});
 const run=db.prepare('SELECT automation_id,status FROM automation_runs WHERE thread_id=?').get(process.argv[3]);
 const automation=db.prepare('SELECT last_run_at,next_run_at FROM automations WHERE id=?').get('integration-monitor');
 db.close();
-if(!run || run.automation_id!=='integration-monitor' || run.status!=='ARCHIVED' || !automation || automation.last_run_at!==Date.parse('2026-07-21T00:00:00Z') || automation.next_run_at!==null) process.exit(8);
+if(!run || run.automation_id!=='integration-monitor' || run.status!=='PENDING_REVIEW' || !automation || automation.last_run_at!==Date.parse('2026-07-21T00:00:00Z') || automation.next_run_at!==null) process.exit(8);
 '@
     $readSchedulerDbScript = Join-Path $catalog.Root "read-scheduler-db.cjs"
     [IO.File]::WriteAllText($readSchedulerDbScript, $readSchedulerDb, (New-Object Text.UTF8Encoding($false)))
