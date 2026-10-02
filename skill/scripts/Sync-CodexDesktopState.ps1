@@ -607,6 +607,7 @@ function Write-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$Mode, 
         thread_catalog_inserted_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.inserted_count } else { 0 }
         thread_catalog_history_mode_repaired_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.history_mode_repaired_count } else { 0 }
         thread_catalog_history_name_repaired_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.history_name_repaired_count } else { 0 }
+        thread_catalog_title_updated_count = if ($ThreadCatalogReport -and $ThreadCatalogReport.PSObject.Properties.Name -contains 'title_updated_count') { [int]$ThreadCatalogReport.title_updated_count } else { 0 }
         thread_catalog_history_path_repaired_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.history_path_repaired_count } else { 0 }
         thread_catalog_unresolved_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.unresolved_count } else { 0 }
         sidebar_sections_status = if ($ThreadCatalogReport -and $ThreadCatalogReport.PSObject.Properties.Name -contains 'sidebar_sections_status') { [string]$ThreadCatalogReport.sidebar_sections_status } else { 'not-requested' }

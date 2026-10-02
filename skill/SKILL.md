@@ -411,3 +411,14 @@ When changing behavior:
 5. Copy the validated exporter to `%USERPROFILE%\Downloads\Export-CodexKit.ps1` only when maintaining a machine-specific convenience entry point.
 
 The Windows synchronized entry is **ChatGPT - CodexKit**, separate from the official **ChatGPT** direct entry. Its icon is extracted from the installed package and stored device-locally. Managed Pull retains the newest five finished results per automation, including accepted results, and archives older results by execution time.
+
+## Authoritative conversation names
+
+Under the user's single-active-machine policy, Managed Pull treats the shared
+session_index.jsonl title as authoritative for every existing thread. Update both
+name and title when present, including nonempty old names; preserve literal
+punctuation and Unicode. Validate the exact thread ID against its rollout header,
+back up the local catalog before mutation, and apply within the closed-app
+transaction. Do not change activity timestamps, archive state, or rollout content.
+This supersedes the earlier preserve-nonempty-name guidance for title synchronization.
+The launch receipt records thread_catalog_title_updated_count.

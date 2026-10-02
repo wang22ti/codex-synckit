@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Synchronize renamed existing conversations from the authoritative shared title
+  index during Managed Pull, including Unicode and literal punctuation. Back up
+  the local catalog and retain thread identity, activity timestamps, and history.
+
 - Retain the newest five completed automation results per definition, including
   accepted results, and archive older results during Managed Pull. Preserve
   running/failed states, back up the scheduler locally, and report retention counts.

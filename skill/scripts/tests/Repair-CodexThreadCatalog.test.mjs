@@ -300,9 +300,9 @@ try {
     0,
   );
   assert.equal(check.prepare("SELECT archived FROM threads WHERE id=?").get(ids.archived).archived, 1);
-  assert.equal(check.prepare("SELECT title FROM threads WHERE id=?").get(ids.existing).title, "existing");
+  assert.equal(check.prepare("SELECT title FROM threads WHERE id=?").get(ids.existing).title, "Existing custom title");
   assert.deepEqual(check.prepare("SELECT * FROM threads WHERE id=?").get(ids.existing),
-    Object.assign(Object.create(null), existingBefore, { history_mode: "paginated", name: "Existing custom title" }));
+    Object.assign(Object.create(null), existingBefore, { history_mode: "paginated", name: "Existing custom title", title: "Existing custom title" }));
   assert.equal(check.prepare("SELECT name FROM threads WHERE id=?").get(ids.active).name, "Active custom title");
   assert.equal(check.prepare("SELECT history_mode FROM threads WHERE id=?").get(ids.active).history_mode, "paginated");
   assert.equal(check.prepare("SELECT history_mode FROM threads WHERE id=?").get(ids.post019).history_mode, "legacy");
@@ -419,6 +419,19 @@ try {
   retentionCheck.close();
   run();
 
+  // Existing names, including literal ** and Chinese characters, follow the index.
+  const renamed = "**大语言模型长尾机制研究-2";
+  writeIndex(baseIndexRows.map(row => row.id === ids.existing ? { ...row, thread_name: renamed } : row));
+  run();
+  const renamedCheck = new DatabaseSync(databasePath, { readOnly: true });
+  assert.equal(renamedCheck.prepare('SELECT name FROM threads WHERE id=?').get(ids.existing).name, renamed);
+  assert.equal(renamedCheck.prepare('SELECT title FROM threads WHERE id=?').get(ids.existing).title, renamed);
+  renamedCheck.close();
+  run();
+  assert.equal(JSON.parse(fs.readFileSync(report, 'utf8')).title_updated_count, 0);
+  writeIndex(baseIndexRows);
+  run();
+
   // Another device may already have applied the initial mode-only patch.
   const nameOnlySetup = new DatabaseSync(databasePath);
   nameOnlySetup.prepare("UPDATE threads SET name=NULL, title='<recommended_plugins> injected text' WHERE id=?").run(ids.existing);
@@ -447,7 +460,7 @@ try {
   customNameSetup.close();
   run();
   const customNameCheck = new DatabaseSync(databasePath, { readOnly: true });
-  assert.equal(customNameCheck.prepare("SELECT name FROM threads WHERE id=?").get(ids.existing).name, "User chosen name");
+  assert.equal(customNameCheck.prepare("SELECT name FROM threads WHERE id=?").get(ids.existing).name, "Existing custom title");
   customNameCheck.close();
 
   // A catalog pointing at another task must not borrow its name or format.
