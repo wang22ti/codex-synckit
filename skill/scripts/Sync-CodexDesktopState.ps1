@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$Push,
     [switch]$Pull,
     [switch]$Merge,
@@ -482,6 +482,9 @@ function Repair-ThreadCatalog {
             automation_scheduler_runs_cataloged = 0
             automation_scheduler_runs_inserted_count = 0
             automation_scheduler_pending_repaired_count = 0
+            automation_scheduler_retention_keep = 5
+            automation_scheduler_retention_reopened_count = 0
+            automation_scheduler_retention_archived_count = 0
             automation_scheduler_watermarks_advanced_count = 0
             automation_scheduler_unresolved_definition_count = 0
         }
@@ -620,6 +623,9 @@ function Write-SyncReceipt([ValidateSet("pull", "push", "merge")][string]$Mode, 
         automation_scheduler_runs_cataloged = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_scheduler_runs_cataloged } else { 0 }
         automation_scheduler_runs_inserted_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_scheduler_runs_inserted_count } else { 0 }
         automation_scheduler_pending_repaired_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_scheduler_pending_repaired_count } else { 0 }
+        automation_scheduler_retention_keep = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_scheduler_retention_keep } else { 5 }
+        automation_scheduler_retention_reopened_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_scheduler_retention_reopened_count } else { 0 }
+        automation_scheduler_retention_archived_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_scheduler_retention_archived_count } else { 0 }
         automation_scheduler_watermarks_advanced_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_scheduler_watermarks_advanced_count } else { 0 }
         automation_scheduler_unresolved_definition_count = if ($ThreadCatalogReport) { [int]$ThreadCatalogReport.automation_scheduler_unresolved_definition_count } else { 0 }
         automation_scheduler_database = if ($automationDatabase) { $automationDatabase } else { $null }

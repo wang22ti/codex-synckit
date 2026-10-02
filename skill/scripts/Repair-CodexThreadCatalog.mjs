@@ -457,12 +457,37 @@ function emptyAutomationSchedulerReport(status, databasePath = null) {
     automation_scheduler_runs_cataloged: 0,
     automation_scheduler_runs_inserted_count: 0,
     automation_scheduler_pending_repaired_count: 0,
+    automation_scheduler_retention_keep: 5,
+    automation_scheduler_retention_reopened_count: 0,
+    automation_scheduler_retention_archived_count: 0,
     automation_scheduler_watermarks_advanced_count: 0,
     automation_scheduler_incomplete_run_count: 0,
     automation_scheduler_unknown_id_count: 0,
     automation_scheduler_unresolved_definition_count: 0,
     automation_scheduler_unresolved_definitions: [],
   };
+}
+
+// Keep recent results visible independently of which device executed them.
+// Rank by execution time, never by the time a result was read or imported.
+function planAutomationRetention(database, definitionIds, keep = 5) {
+  const ranks = new Map();
+  const changes = [];
+  const rows = database.prepare(`
+    SELECT thread_id, automation_id, status FROM automation_runs
+    WHERE status IN ('PENDING_REVIEW', 'ACCEPTED', 'ARCHIVED')
+    ORDER BY created_at DESC, thread_id DESC
+  `).all();
+  for (const row of rows) {
+    if (!definitionIds.has(row.automation_id)) continue;
+    const rank = (ranks.get(row.automation_id) ?? 0) + 1;
+    ranks.set(row.automation_id, rank);
+    const status = rank <= keep
+      ? (row.status === 'ARCHIVED' ? 'PENDING_REVIEW' : row.status)
+      : 'ARCHIVED';
+    if (status !== row.status) changes.push({ ...row, desired_status: status });
+  }
+  return changes;
 }
 
 function reconcileAutomationScheduler(
@@ -502,6 +527,7 @@ function reconcileAutomationScheduler(
   const inserted = [];
   const advanced = [];
   const repairedPending = [];
+  let retentionChanges = [];
   try {
     const quickCheck = database.prepare("PRAGMA quick_check").get();
     if (!quickCheck || Object.values(quickCheck)[0] !== "ok") {
@@ -532,6 +558,19 @@ function reconcileAutomationScheduler(
       .filter((automationId) => latestCompleted.has(automationId) && !definitions.has(automationId))
       .sort();
 
+    // Snapshot before changing existing visibility or importing additional runs.
+    // This database and its backups stay device-local, outside OneDrive.
+    const retentionIds = new Set(definitions.keys());
+    const existingIds = new Set(database.prepare('SELECT thread_id FROM automation_runs').all().map(row => row.thread_id));
+    if (planAutomationRetention(database, retentionIds).length || knownRows.some(row => !existingIds.has(row.id))) {
+      const backupRoot = path.join(path.dirname(databasePath), 'automation-retention-backups');
+      fs.mkdirSync(backupRoot, { recursive: true });
+      const backupPath = path.join(backupRoot, `scheduler-${Date.now()}.sqlite`);
+      database.exec(`VACUUM INTO '${backupPath.replaceAll("'", "''")}'`);
+      const backups = fs.readdirSync(backupRoot).filter(name => /^scheduler-\d+\.sqlite$/.test(name)).sort().reverse();
+      for (const name of backups.slice(2)) fs.unlinkSync(path.join(backupRoot, name));
+    }
+
     database.exec("BEGIN IMMEDIATE");
     try {
       const insertRun = database.prepare(`
@@ -541,8 +580,7 @@ function reconcileAutomationScheduler(
       `);
       for (const row of knownRows) {
         const rollout = rolloutUnion.get(row.id);
-        // Cross-device imports are historical context, not new notifications
-        // on this device. Existing native rows are preserved by INSERT OR IGNORE.
+        // Import first, then apply retention across native and imported results.
         const status = row.automation_completed || rollout?.archived ? "ARCHIVED" : "IN_PROGRESS";
         const changes = insertRun.run(
           row.id,
@@ -563,8 +601,27 @@ function reconcileAutomationScheduler(
       `);
       const repairedAt = Date.now();
       for (const threadId of runStatusRepairIds) {
+        const run = database.prepare('SELECT automation_id FROM automation_runs WHERE thread_id=?').get(threadId);
+        if (run && retentionIds.has(run.automation_id)) continue;
         const changes = repairPending.run(repairedAt, threadId).changes;
         if (changes === 1) repairedPending.push(threadId);
+      }
+
+      retentionChanges = planAutomationRetention(database, retentionIds);
+      const hasArchivedReason = database.prepare('PRAGMA table_info(automation_runs)').all().some(column => column.name === 'archived_reason');
+      const updateRetention = database.prepare(`
+        UPDATE automation_runs SET status=?, read_at=COALESCE(read_at, ?)
+        ${hasArchivedReason ? ", archived_reason=CASE WHEN ?='PENDING_REVIEW' THEN NULL ELSE archived_reason END" : ''}
+        WHERE thread_id=? AND status=?
+      `);
+      for (const change of retentionChanges) {
+        const values = [change.desired_status, repairedAt];
+        if (hasArchivedReason) values.push(change.desired_status);
+        values.push(change.thread_id, change.status);
+        updateRetention.run(...values);
+      }
+      if (planAutomationRetention(database, retentionIds).length) {
+        throw new Error('Automation result retention verification failed');
       }
 
       const advanceWatermark = database.prepare(
@@ -597,6 +654,8 @@ function reconcileAutomationScheduler(
       automation_scheduler_runs_inserted: inserted,
       automation_scheduler_pending_repaired_count: repairedPending.length,
       automation_scheduler_pending_repaired: repairedPending,
+      automation_scheduler_retention_reopened_count: retentionChanges.filter(row => row.desired_status === 'PENDING_REVIEW').length,
+      automation_scheduler_retention_archived_count: retentionChanges.filter(row => row.desired_status === 'ARCHIVED').length,
       automation_scheduler_watermarks_advanced_count: advanced.length,
       automation_scheduler_watermarks_advanced: advanced,
       automation_scheduler_unresolved_definition_count: unresolvedDefinitions.length,

@@ -12,7 +12,7 @@ To roll back safely:
 2. Run `Install-CodexKitForWindows.ps1 -Status` and record enabled links.
 3. Remove only links whose target resolves inside the intended CodexKit.
 4. Restore the newest matching backup for each removed target.
-5. Remove the `ChatGPT` shortcut only if it targets this CodexKit's
+5. Remove the `ChatGPT - CodexKit` shortcut only if it targets this CodexKit's
    `Start-CodexManaged.vbs`.
 6. On the designated automation host, remove the maintenance task with:
 

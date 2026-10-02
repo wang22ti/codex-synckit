@@ -47,7 +47,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\OneDrive\
 
 `-Recommended` installs the three skill links, conversation links, global guidance links, hooks, linked global memory, captures the current device environment inventory, and installs a CodexKit-managed ChatGPT Start menu shortcut. Conversation history and desktop sidebar/project organization are part of the normal setup; desktop organization uses the managed launcher's controlled Pull/Push lifecycle. Profiles, Codex configuration, Codex automations, and the memory-maintenance scheduled task remain excluded. Model, reasoning, feature, and other Codex preferences are selected locally on each machine. `environment\devices\<computer>.json` is a comparison snapshot, not an application or WSL migration mechanism.
 
-The user-visible shortcut name is always `ChatGPT`, and every machine launches `Start-CodexManaged.vbs`. There are no Resident/Synced machine roles. `-InstallResidentStartMenuShortcut` remains accepted only for command-line compatibility and installs the same Managed shortcut. The memory-maintenance task may still belong to one designated automation host, but that does not change its launcher behavior. `-Repair` converts legacy launcher targets to Managed while refreshing the current Appx icon. Legacy `Codex.lnk` and older mode-labeled shortcuts are removed only when their arguments point to this KitRoot's launchers.
+The user-visible shortcut name is `ChatGPT - CodexKit`, and every machine launches `Start-CodexManaged.vbs`. There are no Resident/Synced machine roles. `-InstallResidentStartMenuShortcut` remains accepted only for command-line compatibility and installs the same Managed shortcut. The memory-maintenance task may still belong to one designated automation host, but that does not change its launcher behavior. `-Repair` converts legacy launcher targets to Managed while refreshing the current Appx icon. Legacy `Codex.lnk` and older mode-labeled shortcuts are removed only when their arguments point to this KitRoot's launchers.
 
 Install the memory-maintenance task only on the single designated maintenance host by explicitly adding `-InstallMemoryTask`. On other machines, remove an accidentally installed task with `-RemoveMemoryTask`.
 
@@ -108,9 +108,19 @@ local scheduler database, advances only older `last_run_at` watermarks from
 completed rollouts, clears the corresponding `next_run_at` so the desktop app
 recomputes the next future occurrence, and then launches ChatGPT. The machine
 currently in use therefore executes the next genuinely due run without
-repeating a run completed elsewhere. Completed runs imported from another
-machine are inserted as `ARCHIVED`, so historical synchronization does not
-create unread notifications on the current device. Historical runs belonging
+repeating a run completed elsewhere. On each Managed Pull, retain the newest five finished results per existing
+automation visible and archive older results, ordered by execution
+`created_at` with a deterministic thread-ID tie break. Apply this to imported
+and native rows, including previously archived recent results. Count `ACCEPTED`
+results in the same five-result window: retain their status when recent, archive
+them when older. Reopen recent `ARCHIVED` results as `PENDING_REVIEW`. Reopened rows
+are marked read if needed to avoid replaying unread notifications. Leave
+`IN_PROGRESS`, failed, and other nonterminal/unknown states unchanged. Preserve
+schedule definitions, execution watermarks, and conversation archive state.
+Back up the local scheduler before retention/import changes, retain two backups,
+and record reopened/archived counts in the launch receipt. This supersedes the
+old policy of archiving every cross-device import. Apply only while the app is
+closed; the next Managed launch activates the policy on each device. Historical runs belonging
 to a deleted or replaced automation definition remain available in task
 history but do not block startup; only a currently shared definition that is
 missing from the local scheduler is treated as unresolved.
@@ -253,7 +263,7 @@ Confirm:
   and `.codex\sqlite\codex*.db` remain local. The latest Managed Pull receipt
   must report complete automation scheduler coverage, zero unresolved
   definitions, and a verified scheduler-database hash.
-- The user-visible shortcut is named `ChatGPT` and targets `Start-CodexManaged.vbs` on every machine. The shortcut uses the current Appx `ChatGPT.exe` icon, Managed mode is recorded in `installation.json`, and no stale CodexKit-managed `Codex.lnk` or mode-labeled shortcut remains.
+- The user-visible shortcut is named `ChatGPT - CodexKit` and targets `Start-CodexManaged.vbs` on every machine. The shortcut uses artwork from the installed Appx package, with the executable icon as fallback, Managed mode is recorded in `installation.json`, and no stale CodexKit-managed `Codex.lnk` or mode-labeled shortcut remains.
 
 ## Session Safety
 
@@ -324,8 +334,8 @@ It also transactionally inserts missing rows into the device-local
 `automation_runs` table. For each Automation ID, only a rollout ending in
 `task_complete` may advance the device-local `automations.last_run_at`;
 `next_run_at` is then cleared so the desktop app recomputes the next future
-occurrence from the shared definition. Existing newer watermarks and existing
-run rows are preserved. The receipt hashes both local SQLite databases and the
+occurrence from the shared definition. Existing newer watermarks and run content are preserved; finished-run
+visibility follows the newest-five retention rule above. The receipt hashes both local SQLite databases and the
 launcher rechecks them immediately before opening ChatGPT. Do not concatenate
 divergent JSONL suffixes, silently choose a branch, or copy either database
 between machines.
@@ -399,3 +409,5 @@ When changing behavior:
 4. Test the generated installer against a fake user profile with Windows
    PowerShell 5.1, including pre-existing empty shared roots and hidden files.
 5. Copy the validated exporter to `%USERPROFILE%\Downloads\Export-CodexKit.ps1` only when maintaining a machine-specific convenience entry point.
+
+The Windows synchronized entry is **ChatGPT - CodexKit**, separate from the official **ChatGPT** direct entry. Its icon is extracted from the installed package and stored device-locally. Managed Pull retains the newest five finished results per automation, including accepted results, and archives older results by execution time.

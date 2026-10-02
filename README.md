@@ -15,7 +15,7 @@ Codex SyncKit connects PCs through OneDrive without manual junctions or copying
 hidden folders by hand, providing a continuous Codex experience across
 machines:
 
-- **🚀 One-click launch:** After setup, simply open the managed `ChatGPT`
+- **🚀 One-click launch:** After setup, simply open the managed `ChatGPT - CodexKit`
   Start-menu shortcut. It prepares synchronization before launch and performs
   cleanup after ChatGPT closes.
 - **🔄 Comprehensive continuity:** Conversations, sidebar and project
@@ -64,11 +64,11 @@ and **joining an existing Kit**:
   than guessed at or overwritten.
 
 It then adds the bundled `codexkit-sync` skill, applies the recommended links,
-and creates the managed `ChatGPT` shortcut. Conversation and desktop-state
+and creates the managed `ChatGPT - CodexKit` shortcut. Conversation and desktop-state
 synchronization are enabled by default; use `-ExcludeSessions` or
 `-ExcludeDesktopState` only when those categories should remain local.
 
-Setup is performed once. Afterward, click the managed `ChatGPT` Start-menu
+Setup is performed once. Afterward, click the managed `ChatGPT - CodexKit` Start-menu
 shortcut for one-click launch; synchronization preparation and shutdown cleanup
 run automatically.
 
@@ -228,3 +228,5 @@ For privacy boundaries, recovery, and removal, see
 Codex SyncKit is an independent community project. It is not affiliated with,
 sponsored by, or endorsed by OpenAI. OpenAI, ChatGPT, and Codex are trademarks
 of their respective owners. No OpenAI logos are distributed with this project.
+
+The Windows synchronized entry is **ChatGPT - CodexKit**, separate from the official **ChatGPT** direct entry. Its icon is extracted from the installed package and stored device-locally. Managed Pull retains the newest five finished results per automation, including accepted results, and archives older results by execution time.

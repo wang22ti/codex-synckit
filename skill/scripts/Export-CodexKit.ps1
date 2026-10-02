@@ -1,4 +1,4 @@
-#requires -version 5.1
+﻿#requires -version 5.1
 <#
 .SYNOPSIS
   Extract your current Codex user setup into a portable CodexKit folder, usually under OneDrive.
@@ -1747,6 +1747,43 @@ function Get-ChatGPTDesktopEntry {
     return $null
 }
 
+function Get-ManagedShortcutIcon($Desktop) {
+    # Use installed package artwork; do not redistribute application assets.
+    $assets = Join-Path $Desktop.Package.InstallLocation "assets"
+    $frames = @()
+    foreach ($size in @(16, 24, 32, 48, 256)) {
+        $png = Join-Path $assets "Square44x44Logo.targetsize-${size}_altform-unplated.png"
+        if (Test-Path -LiteralPath $png -PathType Leaf) {
+            $frames += [pscustomobject]@{ Size = $size; Bytes = [IO.File]::ReadAllBytes($png) }
+        }
+    }
+    if ($frames.Count -eq 0) { return "$($Desktop.Executable),0" }
+    $stream = New-Object IO.MemoryStream
+    $writer = New-Object IO.BinaryWriter($stream)
+    try {
+        $writer.Write([uint16]0); $writer.Write([uint16]1); $writer.Write([uint16]$frames.Count)
+        $offset = 6 + 16 * $frames.Count
+        foreach ($frame in $frames) {
+            $writer.Write([byte]($frame.Size % 256)); $writer.Write([byte]($frame.Size % 256))
+            $writer.Write([byte]0); $writer.Write([byte]0)
+            $writer.Write([uint16]1); $writer.Write([uint16]32)
+            $writer.Write([uint32]$frame.Bytes.Length); $writer.Write([uint32]$offset)
+            $offset += $frame.Bytes.Length
+        }
+        foreach ($frame in $frames) { $writer.Write([byte[]]$frame.Bytes) }
+        $writer.Flush()
+        $bytes = $stream.ToArray()
+    } finally { $writer.Dispose(); $stream.Dispose() }
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { $fingerprint = ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-', '').Substring(0, 16) }
+    finally { $sha.Dispose() }
+    $iconRoot = Join-Path $env:LOCALAPPDATA "CodexKit\icons"
+    Ensure-Dir $iconRoot
+    $icon = Join-Path $iconRoot "chatgpt-$fingerprint.ico"
+    if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { [IO.File]::WriteAllBytes($icon, $bytes) }
+    return "$icon,0"
+}
+
 function Read-Shortcut($Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
     try {
@@ -1759,7 +1796,7 @@ function Get-StartMenuShortcutSpec {
     $programs = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
     return [pscustomobject]@{
         Mode = "Managed"
-        Path = Join-Path $programs "ChatGPT.lnk"
+        Path = Join-Path $programs "ChatGPT - CodexKit.lnk"
         Launcher = Join-Path $KitRoot "Start-CodexManaged.vbs"
         Description = "ChatGPT managed launcher via CodexKit"
     }
@@ -1767,7 +1804,7 @@ function Get-StartMenuShortcutSpec {
 
 function Get-ExistingStartMenuMode {
     $programs = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
-    $current = Read-Shortcut (Join-Path $programs "ChatGPT.lnk")
+    $current = Read-Shortcut (Join-Path $programs "ChatGPT - CodexKit.lnk")
     $spec = Get-StartMenuShortcutSpec
     if ($current -and $current.Arguments -match [regex]::Escape($spec.Launcher)) { return "Managed" }
     return $null
@@ -1781,7 +1818,8 @@ function Test-StartMenuShortcut {
     if (-not $shortcut) { return $false }
     return $shortcut.TargetPath -ieq (Join-Path $env:WINDIR "System32\wscript.exe") -and
         $shortcut.Arguments -match [regex]::Escape($spec.Launcher) -and
-        $shortcut.IconLocation -match ('^' + [regex]::Escape($desktop.Executable) + ',')
+        ($shortcut.IconLocation -eq "$($desktop.Executable),0" -or
+         $shortcut.IconLocation -like ((Join-Path $env:LOCALAPPDATA "CodexKit\icons\chatgpt-*.ico") + ',0'))
 }
 
 function Install-StartMenuShortcut {
@@ -1796,13 +1834,14 @@ function Install-StartMenuShortcut {
     $shortcut.TargetPath = Join-Path $env:WINDIR "System32\wscript.exe"
     $shortcut.Arguments = "//B //Nologo `"$($spec.Launcher)`""
     $shortcut.WorkingDirectory = $KitRoot
-    $shortcut.IconLocation = "$($desktop.Executable),0"
+    $shortcut.IconLocation = Get-ManagedShortcutIcon $desktop
     $shortcut.Description = $spec.Description
     $shortcut.WindowStyle = 1
     $shortcut.Save()
     if (-not (Test-StartMenuShortcut)) { throw "Created Start menu shortcut but verification failed: $($spec.Path)" }
 
     $managedPaths = @(
+        (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\ChatGPT.lnk"),
         (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Codex.lnk"),
         (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\ChatGPT (CodexKit Resident).lnk"),
         (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\ChatGPT (CodexKit Synced).lnk"),
@@ -3037,7 +3076,7 @@ cd "__DESTINATION_ROOT__"
 powershell -ExecutionPolicy Bypass -File .\Install-CodexKitForWindows.ps1 -Recommended
 ```
 
-`-Recommended` installs live skill and session links, global guidance links, hooks, linked global memory, controlled project-workspace synchronization, captures a per-device environment inventory, and installs a Start menu shortcut named `ChatGPT`. Every machine uses the same Managed launcher. Conversation history, desktop organization, and projectless workspaces are included by default. Project files are pulled before launch and pushed after exit while `Documents\Codex` remains a real local directory. Profiles, Codex configuration, Codex automations, and the memory-maintenance scheduled task remain excluded. Choose model, reasoning, feature, and other Codex preferences locally on each machine. The legacy `-InstallResidentStartMenuShortcut` parameter is accepted only for command-line compatibility and installs the same Managed shortcut.
+`-Recommended` installs live skill and session links, global guidance links, hooks, linked global memory, controlled project-workspace synchronization, captures a per-device environment inventory, and installs a Start menu shortcut named `ChatGPT - CodexKit`. Every machine uses the same Managed launcher. Conversation history, desktop organization, and projectless workspaces are included by default. Project files are pulled before launch and pushed after exit while `Documents\Codex` remains a real local directory. Profiles, Codex configuration, Codex automations, and the memory-maintenance scheduled task remain excluded. Choose model, reasoning, feature, and other Codex preferences locally on each machine. The legacy `-InstallResidentStartMenuShortcut` parameter is accepted only for command-line compatibility and installs the same Managed shortcut.
 
 The legacy `-InstallCodexProjectsLink` parameter remains accepted, but it now
 enables the same controlled Pull/Push mode and converts an old Junction into a
@@ -3124,8 +3163,10 @@ older `last_run_at` only from a completed shared rollout, clears `next_run_at`
 for desktop-side recomputation, and hashes the scheduler database in the
 launch receipt. This lets whichever single machine is currently in use execute
 the next genuinely due run without repeating a completed run from another
-machine. Imported completed runs are archived locally instead of creating new
-unread notifications. Runs for deleted/replaced definitions remain in history
+machine. Managed Pull retains the newest five finished results per automation,
+including accepted results, and archives older results by execution time. Recent
+archived results reopen as read. Running and failed results remain unchanged.
+Scheduler backups and retention counts stay local. Runs for deleted/replaced definitions remain in history
 but do not block startup; only a currently shared definition missing from the
 local scheduler is unresolved. Never copy or live-link either SQLite database. Open and close ChatGPT
 once on every device before enabling automation synchronization so the local
@@ -3159,7 +3200,7 @@ All machines use the same launcher. It installs the shared primary task/sidebar 
 
 For background launch without a console window, double-click `Start-CodexManaged.vbs`. Keep the `.cmd` launcher for troubleshooting when you want to see logs.
 
-The installer always presents the shortcut as `ChatGPT` and targets `Start-CodexManaged.vbs`. `-Repair` converts legacy Resident/Synced shortcuts to Managed, refreshes the icon from the current Appx desktop executable, and removes legacy CodexKit-managed names only after the replacement verifies successfully.
+The installer always presents the shortcut as `ChatGPT - CodexKit` and targets `Start-CodexManaged.vbs`. `-Repair` converts legacy Resident/Synced shortcuts to Managed, refreshes the icon from the current Appx desktop executable, and removes legacy CodexKit-managed names only after the replacement verifies successfully.
 
 Every machine is a full task/sidebar editor. An already-running ChatGPT process is never hot-patched; the next Managed start pulls the shared primary organization, while this machine publishes its organization after exit. Avoid editing the same conversation simultaneously because session JSONL files are live-linked rather than three-way merged.
 

@@ -319,7 +319,7 @@ try {
   assert.equal(schedulerCheck.prepare("SELECT count(*) AS n FROM automation_runs").get().n, 5);
   assert.equal(
     schedulerCheck.prepare("SELECT count(*) AS n FROM automation_runs WHERE status='ARCHIVED'").get().n,
-    5,
+    1,
   );
   assert.equal(
     schedulerCheck.prepare("SELECT last_run_at FROM automations WHERE id='shared-monitor'").get().last_run_at,
@@ -355,7 +355,8 @@ try {
   assert.equal(result.automation_scheduler_runs, 5);
   assert.equal(result.automation_scheduler_runs_cataloged, 5);
   assert.equal(result.automation_scheduler_runs_inserted_count, 4);
-  assert.equal(result.automation_scheduler_pending_repaired_count, 1);
+  assert.equal(result.automation_scheduler_pending_repaired_count, 0);
+  assert.equal(result.automation_scheduler_retention_reopened_count, 3);
   assert.equal(result.automation_scheduler_watermarks_advanced_count, 2);
   assert.equal(result.automation_scheduler_unresolved_definition_count, 0);
   assert.deepEqual(
@@ -372,6 +373,51 @@ try {
   assert.equal(result.automation_history_path_repaired_count, 0);
   assert.equal(result.automation_scheduler_runs_inserted_count, 0);
   assert.equal(result.automation_scheduler_watermarks_advanced_count, 0);
+
+  // Recent imported results replace old pending results per automation. A read
+  // or updated timestamp must not promote an old run; active/error rows survive.
+  const retentionSetup = new DatabaseSync(automationDatabasePath);
+  retentionSetup.exec("ALTER TABLE automation_runs ADD COLUMN archived_reason TEXT");
+  const retentionInsert = retentionSetup.prepare(`
+    INSERT INTO automation_runs (thread_id,automation_id,status,read_at,created_at,updated_at,archived_reason)
+    VALUES (?,?,?,?,?,?,?)
+  `);
+  for (const automationId of ['shared-monitor', 'weekly-radar']) {
+    for (let i = 0; i < 7; i++) {
+      retentionInsert.run(`retention-${automationId}-${i}`, automationId,
+        i === 0 || i === 6 ? 'ACCEPTED' : (i < 2 ? 'PENDING_REVIEW' : 'ARCHIVED'), i === 6 ? 123 : null,
+        2000000000000 + i, i === 0 ? 9999999999999 : 2000000000000 + i, 'old reason');
+    }
+    retentionInsert.run(`retention-${automationId}-active`, automationId, 'IN_PROGRESS', null, 9999999999999, 1, null);
+    retentionInsert.run(`retention-${automationId}-error`, automationId, 'FAILED', null, 9999999999999, 1, null);
+  }
+  retentionSetup.close();
+  run();
+  let retentionCheck = new DatabaseSync(automationDatabasePath, { readOnly: true });
+  for (const automationId of ['shared-monitor', 'weekly-radar']) {
+    assert.equal(retentionCheck.prepare("SELECT count(*) n FROM automation_runs WHERE automation_id=? AND status IN ('PENDING_REVIEW','ACCEPTED')").get(automationId).n, 5);
+    for (let i = 0; i < 7; i++) {
+      const row = retentionCheck.prepare('SELECT * FROM automation_runs WHERE thread_id=?').get(`retention-${automationId}-${i}`);
+      assert.equal(row.status, i < 2 ? 'ARCHIVED' : (i === 6 ? 'ACCEPTED' : 'PENDING_REVIEW'));
+      if (i >= 2 && i < 6) { assert.equal(row.archived_reason, null); assert.notEqual(row.read_at, null); }
+      if (i === 6) assert.equal(row.read_at, 123);
+    }
+    assert.equal(retentionCheck.prepare('SELECT status FROM automation_runs WHERE thread_id=?').get(`retention-${automationId}-active`).status, 'IN_PROGRESS');
+    assert.equal(retentionCheck.prepare('SELECT status FROM automation_runs WHERE thread_id=?').get(`retention-${automationId}-error`).status, 'FAILED');
+  }
+  const retainedRows = retentionCheck.prepare('SELECT * FROM automation_runs ORDER BY thread_id').all();
+  retentionCheck.close();
+  const retentionBackups = fs.readdirSync(path.join(work, 'automation-retention-backups'));
+  assert.ok(retentionBackups.length > 0 && retentionBackups.length <= 2);
+  run();
+  result = JSON.parse(fs.readFileSync(report, 'utf8'));
+  assert.equal(result.automation_scheduler_retention_reopened_count, 0);
+  assert.equal(result.automation_scheduler_retention_archived_count, 0);
+  retentionCheck = new DatabaseSync(automationDatabasePath);
+  assert.deepEqual(retentionCheck.prepare('SELECT * FROM automation_runs ORDER BY thread_id').all(), retainedRows);
+  retentionCheck.exec("DELETE FROM automation_runs WHERE thread_id LIKE 'retention-%'");
+  retentionCheck.close();
+  run();
 
   // Another device may already have applied the initial mode-only patch.
   const nameOnlySetup = new DatabaseSync(databasePath);
