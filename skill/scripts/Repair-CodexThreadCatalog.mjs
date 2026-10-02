@@ -810,7 +810,8 @@ async function main() {
     }));
     const columnNames = new Set(columns.map((column) => column.name));
     const selectedColumns = ["id", "rollout_path"];
-    if (columnNames.has("name")) selectedColumns.push("name", "title");
+    if (columnNames.has("name")) selectedColumns.push("name");
+    if (columnNames.has("title")) selectedColumns.push("title");
     if (columnNames.has("history_mode")) selectedColumns.push("history_mode");
     if (columnNames.has("thread_source")) selectedColumns.push("thread_source");
     const existingRows = new Map(
@@ -820,6 +821,23 @@ async function main() {
         .map((row) => [row.id.toLowerCase(), row]),
     );
 
+    // Shared title index is authoritative under the single-active-device policy.
+    const titleRepairs = [];
+    for (const [id, indexed] of titles) {
+      const existing = existingRows.get(id);
+      if (!existing || !indexed.title.trim()) continue;
+      const fields = ["name", "title"].filter(field => columnNames.has(field));
+      if (!fields.some(field => existing[field] !== indexed.title)) continue;
+      const rolloutPath = existing.rollout_path && fs.existsSync(existing.rollout_path)
+        ? existing.rollout_path : union.rollouts.get(id)?.path;
+      if (!rolloutPath || !fs.existsSync(rolloutPath)) continue;
+      const first = inspectFirstJsonRow(rolloutPath);
+      const meta = first.row?.type === "session_meta" ? first.row.payload : null;
+      if (asText(meta?.id || meta?.session_id).toLowerCase() !== id) continue;
+      const stat = fs.statSync(rolloutPath);
+      titleRepairs.push({ row: { id, rollout_path: rolloutPath, input_size: stat.size,
+        input_mtime_ms: stat.mtimeMs }, fields, title: indexed.title });
+    }
     const metadata = new Map();
     // Existing imported rows may have been incorrectly registered as legacy.
     // Validate their own rollout, not a same-title or derived rollout candidate.
@@ -879,9 +897,9 @@ async function main() {
         pathRepairRows.push({ row, rollout: union.rollouts.get(id), oldPath: existing.rollout_path });
       }
     }
-    for (const entry of [...insertRows, ...pathRepairRows, ...historyModeRepairs]) assertMetadataInputUnchanged(entry.row);
+    for (const entry of [...insertRows, ...pathRepairRows, ...historyModeRepairs, ...titleRepairs]) assertMetadataInputUnchanged(entry.row);
 
-    if (historyModeRepairs.length) {
+    if (historyModeRepairs.length || titleRepairs.length) {
       const backupRoot = path.join(path.dirname(args.database), "thread-history-mode-backups");
       fs.mkdirSync(backupRoot, { recursive: true });
       const backup = path.join(backupRoot, `state-${Date.now()}.sqlite`);
@@ -925,6 +943,12 @@ async function main() {
             new_path: row.rollout_path,
           });
         }
+      }
+      for (const repair of titleRepairs) {
+        assertMetadataInputUnchanged(repair.row);
+        const values = repair.fields.map(() => repair.title);
+        database.prepare(`UPDATE threads SET ${repair.fields.map(field => `${field}=?`).join(',')} WHERE lower(id)=?`)
+          .run(...values, repair.row.id);
       }
       for (const [id] of titles) {
         if (!union.rollouts.has(id)) continue;
@@ -972,6 +996,7 @@ async function main() {
       inserted_ids: inserted,
       history_mode_repaired_count: historyModeRepairs.filter((entry) => entry.previous_mode !== entry.row.history_mode).length,
       history_name_repaired_count: historyModeRepairs.filter((entry) => entry.name_repaired).length,
+      title_updated_count: titleRepairs.length,
       history_path_repaired_count: historyModeRepairs.filter((entry) => entry.path_repaired).length,
       history_mode_repairs: historyModeRepairs.map(({ row, previous_mode, name_repaired, path_repaired }) => ({
         thread_id: row.id, previous_mode, history_mode: row.history_mode, name_repaired, path_repaired,
