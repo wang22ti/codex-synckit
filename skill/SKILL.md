@@ -422,3 +422,12 @@ back up the local catalog before mutation, and apply within the closed-app
 transaction. Do not change activity timestamps, archive state, or rollout content.
 This supersedes the earlier preserve-nonempty-name guidance for title synchronization.
 The launch receipt records thread_catalog_title_updated_count.
+
+## Scheduler schema compatibility
+
+When advancing a completed-run watermark, clear both next_run_at and, when
+present, next_run_nominal_at for desktop recomputation. Discover the optional
+column before issuing SQL so older scheduler schemas remain supported. For an
+ACTIVE task with no next run, use the native automation update API to validate
+and re-save its schedule; do not assume the old serialized RRULE is accepted by
+the current application. Preserve prompt, model, target, and recurrence meaning.

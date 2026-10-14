@@ -193,6 +193,7 @@ try {
       prompt TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'ACTIVE',
       next_run_at INTEGER,
+      next_run_nominal_at INTEGER DEFAULT 9999999999999,
       last_run_at INTEGER,
       cwds TEXT NOT NULL DEFAULT '[]',
       rrule TEXT NOT NULL,
@@ -330,6 +331,11 @@ try {
     null,
   );
   schedulerCheck.close();
+
+  const nominalCheck = new DatabaseSync(automationDatabasePath, { readOnly: true });
+  assert.equal(nominalCheck.prepare("SELECT next_run_nominal_at FROM automations WHERE id='shared-monitor'").get().next_run_nominal_at, null);
+  assert.equal(nominalCheck.prepare("SELECT next_run_nominal_at FROM automations WHERE id='weekly-radar'").get().next_run_nominal_at, null);
+  nominalCheck.close();
 
   let result = JSON.parse(fs.readFileSync(report, "utf8"));
   assert.equal(result.inserted_count, 7);
