@@ -624,8 +624,10 @@ function reconcileAutomationScheduler(
         throw new Error('Automation result retention verification failed');
       }
 
+      const hasNominalRunTime = database.prepare('PRAGMA table_info(automations)').all()
+        .some(column => column.name === 'next_run_nominal_at');
       const advanceWatermark = database.prepare(
-        "UPDATE automations SET last_run_at=?, next_run_at=NULL WHERE id=? AND (last_run_at IS NULL OR last_run_at < ?)",
+        `UPDATE automations SET last_run_at=?, next_run_at=NULL${hasNominalRunTime ? ', next_run_nominal_at=NULL' : ''} WHERE id=? AND (last_run_at IS NULL OR last_run_at < ?)`,
       );
       for (const [automationId, row] of latestCompleted) {
         if (!definitions.has(automationId)) continue;

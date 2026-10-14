@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Clear the optional nominal next-run timestamp along with the actual next-run
+  timestamp when importing a newer completed automation run, while retaining
+  compatibility with older scheduler schemas.
+
 - Synchronize renamed existing conversations from the authoritative shared title
   index during Managed Pull, including Unicode and literal punctuation. Back up
   the local catalog and retain thread identity, activity timestamps, and history.
