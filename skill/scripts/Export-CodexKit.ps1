@@ -853,13 +853,16 @@ function Export-GlobalMemory {
     }
     Write-Info "Extracting global memory"
     $destination = Join-Path $script:DestinationRoot "global-memory"
-    if (-not (Test-Path -LiteralPath $script:SourceGlobalMemory -PathType Container)) {
+    if (Test-Path -LiteralPath $script:SourceGlobalMemory -PathType Container) {
+        Copy-DirectorySafe -Source $script:SourceGlobalMemory -Destination $destination -Category "global-memory"
+    } else {
         Write-Skip "no global memory found at $script:SourceGlobalMemory"
         Add-Action -Type "copy-dir" -Source $script:SourceGlobalMemory -Destination $destination -Status "missing"
-        return
     }
-
-    Copy-DirectorySafe -Source $script:SourceGlobalMemory -Destination $destination -Category "global-memory"
+    $gitOptOut = Join-Path $destination ".memory-no-git"
+    if (-not (Test-Path -LiteralPath $gitOptOut -PathType Leaf)) {
+        Write-TextFileSafe -Destination $gitOptOut -Content "Shared memory Git operations are disabled. Keep Git backups outside OneDrive." -Category "global-memory-policy"
+    }
 }
 
 function Export-Sessions {
@@ -2878,6 +2881,17 @@ if ($CaptureEnvironmentInventory) {
         throw "Missing environment inventory helper: $EnvironmentInventoryScript"
     }
     & $EnvironmentInventoryScript -KitRoot $KitRoot
+}
+
+# Protect shared memory on install and repair, including already-current links.
+$sharedMemoryRoot = Join-Path $KitRoot "global-memory"
+if ($MemorySubsystemEnabled -and ($InstallGlobalMemory -or $InstallGlobalMemoryLink -or
+    (Test-PathTargetsSource -Target (Join-Path $env:USERPROFILE "global-memory") -Source $sharedMemoryRoot))) {
+    $gitOptOut = Join-Path $sharedMemoryRoot ".memory-no-git"
+    if ((Test-Path -LiteralPath $sharedMemoryRoot -PathType Container) -and
+        -not (Test-Path -LiteralPath $gitOptOut -PathType Leaf)) {
+        [IO.File]::WriteAllText($gitOptOut, "Shared memory Git operations are disabled. Keep Git backups outside OneDrive.", (New-Object Text.UTF8Encoding($false)))
+    }
 }
 
 if ($InstallGlobalMemory) {

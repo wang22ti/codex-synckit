@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.3.1-alpha - 2026-11-15
+
+- Disable shared global-memory Git initialization and automatic commits with a
+  portable .memory-no-git marker, including namespace overrides and linked paths.
+- Preserve memory capture and maintenance when older settings enable Git, and
+  prevent fallback into a parent repository after the memory repository is archived.
+- Create the marker during memory export and linked-memory installation or repair.
+  Existing Git histories remain available for an explicitly requested external archive.
+
 
 - Clear the optional nominal next-run timestamp along with the actual next-run
   timestamp when importing a newer completed automation run, while retaining

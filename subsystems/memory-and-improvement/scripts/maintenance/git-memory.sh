@@ -74,6 +74,22 @@ ensure_git_repo() {
     fi
 }
 
+# A portable opt-out applies to every namespace below the marked root.
+# Check before repository discovery, which could otherwise select a parent repo.
+memory_git_disabled() {
+    local directory
+    directory="$(self_improving_normalize_path "$1")"
+    while [[ -n "$directory" ]]; do
+        if [[ -f "$directory/.memory-no-git" ]]; then
+            printf 'Memory Git skipped: %s disables Git operations.\n' "$directory/.memory-no-git" >&2
+            return 0
+        fi
+        [[ "$directory" == / ]] && break
+        directory="$(dirname "$directory")"
+    done
+    return 1
+}
+
 resolve_scope_repo() {
     local target_scope="$1"
     local memory_dir="$2"
@@ -185,6 +201,9 @@ handle_project_scope() {
     local status_kind
 
     memory_dir="$(resolve_project_memory_dir)"
+    if memory_git_disabled "$memory_dir"; then
+        return 0
+    fi
     bash "$SCRIPT_ROOT/bootstrap/init-memory.sh" --scope project --project-root "$project_root" ${project_memory_dir:+--project-memory-dir "$project_memory_dir"} >/dev/null
     repo_info="$(resolve_scope_repo "project" "$memory_dir")"
     repo_root="${repo_info%%$'\t'*}"
@@ -219,6 +238,9 @@ handle_global_scope() {
     local global_root_readme
 
     memory_dir="$(resolve_global_memory_dir)"
+    if memory_git_disabled "$memory_dir"; then
+        return 0
+    fi
     namespace_dir="$(self_improving_resolve_global_namespace_dir "$namespace" "$global_memory_dir_override")"
     namespaces_root="$self_improving_global_namespaces_root"
     preferred_repo_root="$self_improving_global_root"

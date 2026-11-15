@@ -1,4 +1,4 @@
-#requires -version 5.1
+﻿#requires -version 5.1
 [CmdletBinding()]
 param()
 
@@ -60,6 +60,8 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "desktop-state\.codex-global-state.json") -PathType Leaf) "default export should include desktop organization"
     Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "global-memory\README.md") -PathType Leaf) "default export should include the selected memory subsystem data"
     Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "skills\codex-skills\memory-and-improvement\SKILL.md") -PathType Leaf) "default export should include the selected memory subsystem skill"
+    Assert-True (Test-Path -LiteralPath (Join-Path $defaultDestination "global-memory\.memory-no-git") -PathType Leaf) "shared memory must opt out of Git initialization and commits"
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $sourceMemory ".memory-no-git"))) "export must preserve source memory"
     $defaultManifest = Get-Content -LiteralPath (Join-Path $defaultDestination "manifest.json") -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert-True ([string]$defaultManifest.product -eq "codex-synckit") "manifest should identify Codex SyncKit"
     Assert-True ([int]$defaultManifest.manifest_version -eq 1) "manifest should record its schema version"
@@ -71,6 +73,7 @@ try {
     Assert-True ([bool]$defaultManifest.include_desktop_state) "manifest should record default desktop-state inclusion"
     Assert-True ([bool]$defaultManifest.include_memory_subsystem) "manifest should record memory subsystem inclusion"
 
+    Set-Content -LiteralPath (Join-Path $sourceMemory ".memory-no-git") -Value 'custom opt-out policy' -Encoding UTF8
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $exporter `
         -SourceCodexHome $sourceCodex `
         -SourceDesktopState $overrideDesktopState `
@@ -81,6 +84,14 @@ try {
         -ExcludeMemorySubsystem `
         -Force
     if ($LASTEXITCODE -ne 0) { throw "Desktop-state override export failed with exit code $LASTEXITCODE." }
+    $markerDestination = Join-Path $testRoot "marker-kit"
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $exporter -SourceCodexHome $sourceCodex -SourceAgentsRoot $sourceAgents -SourceGlobalMemory $sourceMemory -DestinationRoot $markerDestination -Force
+    if ($LASTEXITCODE -ne 0) { throw "Marker export failed." }
+    $markerManifest = Get-Content -LiteralPath (Join-Path $markerDestination "manifest.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+    $markerEntries = @($markerManifest.files | Where-Object { [string]$_.path -replace '\\', '/' -eq 'global-memory/.memory-no-git' })
+    Assert-True ($markerEntries.Count -eq 1) "existing marker should have exactly one manifest entry"
+    $markerHash = (Get-FileHash -LiteralPath (Join-Path $markerDestination "global-memory\.memory-no-git") -Algorithm SHA256).Hash
+    Assert-True ($markerEntries[0].sha256 -eq $markerHash) "marker manifest hash should match preserved content"
     $overrideState = Get-Content -LiteralPath (Join-Path $overrideDestination "desktop-state\.codex-global-state.json") -Raw -Encoding UTF8
     Assert-True ($overrideState -match '"override"\s*:\s*true') "explicit desktop-state source should be exported"
     $managedVbsPath = Join-Path $defaultDestination "Start-CodexManaged.vbs"

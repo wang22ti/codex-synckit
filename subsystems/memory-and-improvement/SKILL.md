@@ -224,6 +224,12 @@ Shortcut wrappers:
 - `scripts/shortcuts/index-asset.sh`
 - `scripts/shortcuts/list-registered-project-memories.sh`
 
+## Memory Git opt-out
+
+A .memory-no-git file in a memory directory or an ancestor disables this skill's Git initialization, status initialization, and commits for that subtree. Check for this marker before invoking Git directly. Preserve it when synchronizing memory. Capture and maintenance continue normally even when older settings request automatic commits.
+
+Codex SyncKit creates this marker for shared global memory. Keep Git archives outside the sync directory. Existing Git history requires a separately authorized archive or removal.
+
 ## Hook Integration
 
 Hooks are opt-in.
